@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Niamké Admin</title>
+<style>
+:root{--navy:#0f172a;--rose:#f43f5e;--bg:#eef1f5;--line:#e2e8f0;--mut:#64748b;--ok:#16a34a;--ko:#dc2626;--wait:#d97706}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--navy);font-family:"Segoe UI",Arial,sans-serif}
+header{background:var(--navy);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:10}
+header h1{margin:0;font-size:19px;font-weight:900;letter-spacing:.3px}
+header h1 span{color:var(--rose)}
+.chip{font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.12)}
+.chip.demo{background:#facc15;color:#422006}
+button{font-family:inherit;cursor:pointer}
+.btn{border:0;border-radius:10px;padding:10px 14px;font-weight:800;font-size:13px}
+.btn.rose{background:var(--rose);color:#fff}
+.btn.navy{background:var(--navy);color:#fff}
+.btn.ghost{background:#fff;border:1.5px solid var(--line);color:var(--mut)}
+.wrap{max-width:980px;margin:0 auto;padding:16px}
+.banner{background:#fef9c3;border:1px solid #fde047;color:#713f12;border-radius:12px;padding:12px 14px;font-size:13px;font-weight:600;margin-bottom:14px;line-height:1.45}
+.login{max-width:380px;margin:60px auto;background:#fff;border:1px solid var(--line);border-radius:22px;padding:28px 24px;box-shadow:0 20px 60px rgba(15,23,42,.1)}
+.login h2{margin:0 0 4px;font-size:24px}
+.login p{margin:0 0 6px;color:var(--mut);font-size:13px}
+label{display:block;margin:14px 0 5px;font-size:12px;font-weight:700;color:var(--mut)}
+input[type=text],input[type=email],input[type=password],input[type=tel],input[type=search]{width:100%;padding:12px 13px;border:1.5px solid var(--line);border-radius:12px;font-size:15px;outline:none;font-family:inherit}
+input:focus{border-color:var(--rose)}
+.err{color:var(--ko);font-weight:700;font-size:13px;min-height:18px;margin-top:10px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+.stat b{display:block;font-size:26px;font-weight:900}
+.stat span{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--mut)}
+.stat.ok b{color:var(--ok)}.stat.ko b{color:var(--ko)}.stat.wait b{color:var(--wait)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.bar input[type=search]{flex:1;min-width:180px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{border:1.5px solid var(--line);background:#fff;color:var(--mut);padding:8px 12px;border-radius:20px;font-weight:800;font-size:12px}
+.tab.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.set{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:12px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:13px}
+.set small{display:block;color:var(--mut);font-weight:600;margin-top:2px}
+.sw{position:relative;width:48px;height:28px;flex-shrink:0}
+.sw input{opacity:0;width:0;height:0}
+.sw i{position:absolute;inset:0;background:#cbd5e1;border-radius:20px;transition:.2s;cursor:pointer}
+.sw i:before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.sw input:checked+i{background:var(--rose)}
+.sw input:checked+i:before{transform:translateX(20px)}
+.list{display:grid;gap:10px}
+.card{background:#fff;border:1px solid var(--line);border-left:6px solid var(--ok);border-radius:16px;padding:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.card.blocked{border-left-color:var(--ko);background:#fff7f7}
+.card.pending{border-left-color:var(--wait);background:#fffbeb}
+.av{width:48px;height:48px;border-radius:50%;background:var(--navy) center/cover no-repeat;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;flex-shrink:0}
+.av.big{width:110px;height:110px;font-size:40px;margin:0 auto 12px}
+.fiche{margin-top:6px;text-align:left}
+.fiche div{padding:9px 0;border-bottom:1px solid var(--line);font-size:14px;display:flex;justify-content:space-between;gap:12px}
+.fiche div span:first-child{color:var(--mut);font-weight:700;font-size:12px}
+.btn.see{background:#eef2ff;color:#3730a3}
+.info{flex:1;min-width:160px}
+.info b{font-size:15px}
+.info div{font-size:12px;color:var(--mut);font-weight:600;margin-top:2px}
+.badge{display:inline-block;font-size:10px;font-weight:900;letter-spacing:.8px;padding:3px 8px;border-radius:20px;margin-left:6px;vertical-align:middle;text-transform:uppercase}
+.badge.ok{background:#dcfce7;color:#166534}.badge.ko{background:#fee2e2;color:#991b1b}.badge.wait{background:#fef3c7;color:#92400e}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:5px}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.btn.block{background:var(--ko);color:#fff;min-width:118px}
+.btn.react{background:var(--ok);color:#fff;min-width:118px}
+.btn.del{background:#f1f5f9;color:var(--mut)}
+.empty{text-align:center;color:var(--mut);padding:40px 10px;font-weight:600}
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.6);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal.on{display:flex}
+.box{background:#fff;border-radius:20px;padding:22px;width:100%;max-width:420px}
+.box h3{margin:0 0 4px;font-size:20px}
+.box p{margin:0;color:var(--mut);font-size:13px}
+.row{display:flex;gap:8px;margin-top:18px}.row .btn{flex:1}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 18px;border-radius:12px;font-weight:700;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:60}
+.toast.on{opacity:1}
+@media(max-width:640px){.stats{grid-template-columns:repeat(2,1fr)}.acts{width:100%}.acts .btn{flex:1}}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Niamké</span> Admin</h1>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="chip" id="mode"></span>
+    <button class="btn ghost" id="logout" style="display:none;padding:7px 11px">Déconnexion</button>
+  </div>
+</header>
+
+<div class="wrap" id="loginView" style="display:none">
+  <form class="login" id="loginForm" autocomplete="on">
+    <h2>Espace administrateur</h2>
+    <p>Réservé au propriétaire.</p>
+    <label>E-mail admin</label><input type="email" id="lemail" autocomplete="username" required>
+    <label>Mot de passe</label><input type="password" id="lpass" autocomplete="current-password" required>
+    <div class="err" id="lerr"></div>
+    <button class="btn rose" style="width:100%;margin-top:8px;padding:13px" type="submit">Se connecter</button>
+  </form>
+</div>
+
+<div class="wrap" id="mainView" style="display:none">
+  <div class="banner" id="demoBanner" style="display:none"><b>MODE DÉMO</b> — tout reste sur cet appareil, rien n’est envoyé aux clients. Les clients qui se connectent depuis un autre téléphone ne sont PAS visibles ici. Remplis <code>niamke-config.js</code> (supabaseUrl, supabaseKey, adminEmail) pour les voir en direct.</div>
+
+  <div class="stats">
+    <div class="stat"><b id="sTot">0</b><span>Clients</span></div>
+    <div class="stat ok"><b id="sOk">0</b><span>Actifs</span></div>
+    <div class="stat ko"><b id="sKo">0</b><span>Bloqués</span></div>
+    <div class="stat wait"><b id="sWait">0</b><span>En attente</span></div>
+  </div>
+
+  <div class="set">
+    <div><b>Valider moi-même les nouveaux clients</b><small>Activé : un nouveau numéro reste en attente jusqu’à ce que tu cliques « Activer ».</small></div>
+    <label class="sw" style="margin:0"><input type="checkbox" id="approval"><i></i></label>
+  </div>
+
+  <div class="bar">
+    <input type="search" id="q" placeholder="Rechercher un nom ou un numéro…">
+    <button class="btn rose" id="add">+ Ajouter un client</button>
+    <button class="btn ghost" id="refresh">↻</button>
+  </div>
+  <div class="tabs" style="margin-bottom:12px" id="tabs">
+    <button class="tab on" data-f="all">Tous</button>
+    <button class="tab" data-f="active">Actifs</button>
+    <button class="tab" data-f="blocked">Bloqués</button>
+    <button class="tab" data-f="pending">En attente</button>
+  </div>
+  <div class="list" id="list"></div>
+</div>
+
+<!-- Modale : bloquer -->
+<div class="modal" id="mBlock"><div class="box">
+  <h3>Bloquer <span id="mbName"></span> ?</h3>
+  <p>Il verra « Accès bloqué » dès sa prochaine ouverture (moins d’une minute s’il est connecté), même avec son mot de passe.</p>
+  <label>Message affiché au client (facultatif)</label>
+  <input type="text" id="mbMsg" placeholder="Ex : Abonnement expiré, contactez-moi.">
+  <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn block" id="mbGo">Bloquer</button></div>
+</div></div>
+
+<!-- Modale : ajouter -->
+<div class="modal" id="mAdd"><div class="box">
+  <h3>Ajouter un client</h3>
+  <p>Son numéro de téléphone sert de code d’accès.</p>
+  <label>Nom</label><input type="text" id="maNom">
+  <label>Téléphone</label><input type="tel" id="maTel" inputmode="tel">
+  <div class="err" id="maErr"></div>
+  <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn rose" id="maGo">Ajouter</button></div>
+</div></div>
+
+<!-- Modale : supprimer -->
+<div class="modal" id="mDel"><div class="box">
+  <h3>Supprimer <span id="mdName"></span> ?</h3>
+  <p>Il disparaît de ta liste. S’il rouvre l’application, il réapparaîtra comme nouveau client. Pour l’empêcher d’entrer, utilise plutôt <b>Bloquer</b>.</p>
+  <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn block" id="mdGo">Supprimer</button></div>
+</div></div>
+
+<!-- Modale : fiche client -->
+<div class="modal" id="mInfo"><div class="box" style="text-align:center">
+  <div class="av big" id="miAv"></div>
+  <h3 id="miNom"></h3>
+  <div class="fiche" id="miBody"></div>
+  <div class="row"><button class="btn ghost" data-close>Fermer</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script src="niamke-config.js"></script>
+<script>
+(function () {
+  'use strict';
+  var CFG = window.NIAMKE_CFG || {};
+  var SB = (CFG.supabaseUrl || '').replace(/\/+$/, ''), KEY = CFG.supabaseKey || '';
+  var DEMO = !(SB && KEY && CFG.adminEmail);
+  var token = null, refresh = null, photoCache = null;
+  var data = { clients: {}, status: {}, seen: {}, config: {} };
+  var filter = 'all', pendingId = null, known = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function idOf(t) { return String(t || '').replace(/\D/g, ''); }
+  function toast(t) { var e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(function () { e.classList.remove('on'); }, 2400); }
+
+  /* ---------- accès aux données (Firebase ou démo local) ---------- */
+  var demoDb = (function () { try { return JSON.parse(localStorage.getItem('nl_demo') || 'null'); } catch (e) { return null; } })() || { clients: {}, status: {}, seen: {}, config: {} };
+  function demoSave() { try { localStorage.setItem('nl_demo', JSON.stringify(demoDb)); } catch (e) {} }
+
+  /*SB-ADAPTER-START*/
+  function fromRow(t, r) {
+    if (!r) return null;
+    if (t === 'clients') return { nom: r.nom, entreprise: r.entreprise, tel: r.tel, adresse: r.adresse, photo: r.photo, createdAt: r.created_at, by: r.added_by };
+    if (t === 'status') return { blocked: r.blocked, msg: r.msg, ts: r.ts };
+    if (t === 'seen') return { nom: r.nom, ts: r.ts };
+    if (t === 'config') return { approval: r.approval };
+    return r;
+  }
+  function toRow(t, id, v) {
+    v = v || {};
+    if (t === 'clients') return { id: id, nom: v.nom, entreprise: v.entreprise, tel: v.tel, adresse: v.adresse, photo: v.photo, created_at: v.createdAt, added_by: v.by };
+    if (t === 'status') return { id: id, blocked: !!v.blocked, msg: v.msg || '', ts: v.ts };
+    if (t === 'config') return { id: 1, approval: !!v.approval };
+    throw new Error('Table inconnue : ' + t);
+  }
+  function sbRest(method, rel, body, prefer) {
+    var h = { apikey: KEY, 'Content-Type': 'application/json', Authorization: 'Bearer ' + token };
+    if (prefer) h.Prefer = prefer;
+    return fetch(SB + '/rest/v1/' + rel, { method: method, headers: h, body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store' }).then(function (r) {
+      if (r.status === 401) { var e = new Error('401'); e.auth = true; throw e; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.status === 204 ? null : r.text().then(function (t) { return t ? JSON.parse(t) : null; });
+    });
+  }
+  function sbDb(method, path, body) {
+    var p = path.split('/').filter(Boolean), t = p[0], id = p[1];
+    if (t === 'clients_photos') return sbRest('GET', 'clients?select=id,photo&photo=not.is.null').then(function (rows) { var o = {}; (rows || []).forEach(function (r) { o[r.id] = { photo: r.photo }; }); return o; });
+    if (method === 'GET') {
+      if (t === 'config') return sbRest('GET', 'config?select=*&id=eq.1').then(function (rows) { return rows && rows[0] ? fromRow('config', rows[0]) : null; });
+      var sel = t === 'clients' ? 'id,nom,entreprise,tel,adresse,created_at,added_by' : '*';
+      return sbRest('GET', t + '?select=' + sel).then(function (rows) { var o = {}; (rows || []).forEach(function (r) { o[r.id] = fromRow(t, r); }); return o; });
+    }
+    if (method === 'DELETE') return sbRest('DELETE', t + '?id=eq.' + encodeURIComponent(id)).then(function () { return null; });
+    return sbRest('POST', t + '?on_conflict=id', toRow(t, id, body), 'resolution=merge-duplicates,return=minimal').then(function () { return body; });
+  }
+  /*SB-ADAPTER-END*/
+
+  function db(method, path, body) {
+    if (DEMO) {
+      var parts = path.split('/').filter(Boolean), node = demoDb;
+      for (var i = 0; i < parts.length - 1; i++) { node[parts[i]] = node[parts[i]] || {}; node = node[parts[i]]; }
+      var last = parts[parts.length - 1];
+      if (method === 'GET') return Promise.resolve(parts.length ? node[last] || null : demoDb);
+      if (method === 'DELETE') delete node[last]; else node[last] = body;
+      demoSave();
+      return Promise.resolve(body || null);
+    }
+    return sbDb(method, path, body);
+  }
+
+  /* ---------- connexion admin ---------- */
+  function authCall(grant, body) {
+    return fetch(SB + '/auth/v1/token?grant_type=' + grant, { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return {}; }); }, function () { throw new Error('Pas de connexion à Supabase (réseau, ou adresse du projet incorrecte dans niamke-config.js).'); });
+  }
+  function authMsg(j) {
+    var code = String(j.error_code || j.code || j.error || ''), msg = String(j.msg || j.error_description || j.message || '');
+    if (/invalid_credentials|invalid login/i.test(code + ' ' + msg)) return 'E-mail ou mot de passe incorrect pour ce compte (' + (code || 'invalid_credentials') + ').';
+    if (/email_not_confirmed/i.test(code + ' ' + msg)) return 'Compte non confirmé : dans Supabase > Authentication > Users, confirme cet utilisateur.';
+    if (/provider_disabled|logins are disabled/i.test(code + ' ' + msg)) return 'La connexion par e-mail est désactivée : Supabase > Authentication > Sign In / Providers > Email > activer.';
+    if (/rate_limit|too many/i.test(code + ' ' + msg)) return 'Trop d’essais. Attends quelques minutes puis réessaie.';
+    if (/invalid api key|apikey/i.test(code + ' ' + msg)) return 'Clé Supabase refusée : vérifie supabaseKey dans niamke-config.js.';
+    return 'Connexion refusée par Supabase : ' + (msg || code || 'raison inconnue') + (code && msg ? ' [' + code + ']' : '');
+  }
+  function signIn(email, pass) {
+    return authCall('password', { email: email.trim(), password: pass }).then(function (j) {
+      if (!j.access_token) throw new Error(authMsg(j));
+      if (((j.user && j.user.email) || '').toLowerCase() !== CFG.adminEmail.toLowerCase()) throw new Error('Ce compte n’est pas administrateur.');
+      token = j.access_token; refresh = j.refresh_token;
+      try { localStorage.setItem('nl_rt', refresh); } catch (e) {}
+    });
+  }
+  function doRefresh() {
+    if (!refresh) return Promise.reject(new Error('no'));
+    return authCall('refresh_token', { refresh_token: refresh }).then(function (j) {
+      if (!j.access_token) throw new Error('expired');
+      token = j.access_token; refresh = j.refresh_token || refresh;
+      try { localStorage.setItem('nl_rt', refresh); } catch (e) {}
+    });
+  }
+  function logout() { token = refresh = null; try { localStorage.removeItem('nl_rt'); } catch (e) {} showLogin(); }
+
+  function showLogin() {
+    $('loginView').style.display = 'block'; $('mainView').style.display = 'none'; $('logout').style.display = 'none';
+  }
+  function showMain() {
+    $('loginView').style.display = 'none'; $('mainView').style.display = 'block';
+    $('logout').style.display = DEMO ? 'none' : 'inline-block';
+    $('demoBanner').style.display = DEMO ? 'block' : 'none';
+    load();
+  }
+
+  /* ---------- chargement + rendu ---------- */
+  function load() {
+    return Promise.all([db('GET', '/clients'), db('GET', '/status'), db('GET', '/seen'), db('GET', '/config')]).then(function (r) {
+      data = { clients: r[0] || {}, status: r[1] || {}, seen: r[2] || {}, config: r[3] || {} };
+      var ids = Object.keys(data.clients).concat(Object.keys(data.seen));
+      if (known) {
+        var fresh = ids.filter(function (i) { return !known[i]; });
+        if (fresh.length) { var c0 = data.clients[fresh[0]] || data.seen[fresh[0]] || {}; toast('🆕 Nouveau client : ' + (c0.nom || fresh[0]) + (fresh.length > 1 ? ' (+' + (fresh.length - 1) + ')' : '')); }
+      }
+      known = {}; ids.forEach(function (i) { known[i] = 1; });
+      $('approval').checked = !!data.config.approval;
+      return withPhotos().then(render);
+    }).catch(function (e) {
+      if (e.auth) return doRefresh().then(load).catch(logout);
+      toast('Erreur de connexion à la base.');
+    });
+  }
+
+  function withPhotos() {
+    if (DEMO) return Promise.resolve();
+    var need = photoCache === null || Object.keys(data.clients).some(function (i) { return !(i in photoCache); });
+    var step = need ? db('GET', '/clients_photos').then(function (o) {
+      photoCache = photoCache || {};
+      Object.keys(data.clients).forEach(function (i) { photoCache[i] = (o[i] && o[i].photo) || ''; });
+    }) : Promise.resolve();
+    return step.then(function () { Object.keys(data.clients).forEach(function (i) { data.clients[i].photo = photoCache[i] || ''; }); });
+  }
+  function stateOf(id) {
+    var st = data.status[id];
+    if (st) return st.blocked ? 'blocked' : 'active';
+    return data.config.approval ? 'pending' : 'active';
+  }
+  function ago(ts) {
+    if (!ts) return 'jamais vu';
+    var s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 180) return 'en ligne';
+    if (s < 3600) return 'vu il y a ' + Math.floor(s / 60) + ' min';
+    if (s < 86400) return 'vu il y a ' + Math.floor(s / 3600) + ' h';
+    return 'vu il y a ' + Math.floor(s / 86400) + ' j';
+  }
+  function list() {
+    var out = [];
+    Object.keys(data.clients).forEach(function (id) {
+      var c = data.clients[id] || {}, sn = data.seen[id] || {};
+      out.push({ id: id, nom: c.nom || sn.nom || 'Sans nom', ent: c.entreprise || '', adr: c.adresse || '', photo: c.photo || '', tel: c.tel || id, created: c.createdAt, ts: sn.ts, st: stateOf(id), msg: (data.status[id] || {}).msg });
+    });
+    // clients vus mais pas (encore) enregistrés
+    Object.keys(data.seen).forEach(function (id) {
+      if (!data.clients[id]) out.push({ id: id, nom: data.seen[id].nom || 'Sans nom', tel: id, ts: data.seen[id].ts, st: stateOf(id) });
+    });
+    return out.sort(function (a, b) {
+      var w = { pending: 0, blocked: 1, active: 2 };
+      return (w[a.st] - w[b.st]) || ((b.ts || 0) - (a.ts || 0));
+    });
+  }
+  function render() {
+    var all = list(), q = $('q').value.trim().toLowerCase();
+    $('sTot').textContent = all.length;
+    $('sOk').textContent = all.filter(function (c) { return c.st === 'active'; }).length;
+    $('sKo').textContent = all.filter(function (c) { return c.st === 'blocked'; }).length;
+    $('sWait').textContent = all.filter(function (c) { return c.st === 'pending'; }).length;
+    var rows = all.filter(function (c) {
+      if (filter !== 'all' && c.st !== filter) return false;
+      return !q || (c.nom + ' ' + c.tel).toLowerCase().indexOf(q) > -1;
+    });
+    if (!rows.length) { $('list').innerHTML = '<div class="empty">Aucun client ici pour le moment.</div>'; return; }
+    $('list').innerHTML = rows.map(function (c) {
+      var label = { active: 'Actif', blocked: 'Bloqué', pending: 'En attente' }[c.st];
+      var cls = { active: 'ok', blocked: 'ko', pending: 'wait' }[c.st];
+      var online = ago(c.ts) === 'en ligne';
+      var btn = c.st === 'active'
+        ? '<button class="btn block" data-a="block" data-id="' + c.id + '">🔒 BLOQUER</button>'
+        : '<button class="btn react" data-a="on" data-id="' + c.id + '">' + (c.st === 'pending' ? '✓ ACTIVER' : '🔓 RÉACTIVER') + '</button>';
+      return '<div class="card ' + (c.st === 'active' ? '' : c.st) + '">' +
+        '<div class="av" style="' + (c.photo ? 'background-image:url(' + esc(c.photo) + ')' : '') + '">' + (c.photo ? '' : esc((c.nom || '?').charAt(0).toUpperCase())) + '</div>' +
+        '<div class="info"><b>' + esc(c.nom) + '</b><span class="badge ' + cls + '">' + label + '</span>' +
+        (c.ent ? '<div>🏢 ' + esc(c.ent) + '</div>' : '') +
+        '<div>📞 ' + esc(c.tel) + ' · ' + (online ? '<span class="dot"></span>' : '') + ago(c.ts) + '</div>' +
+        (c.st === 'blocked' && c.msg ? '<div>Message : « ' + esc(c.msg) + ' »</div>' : '') + '</div>' +
+        '<div class="acts"><button class="btn see" data-a="info" data-id="' + c.id + '">Fiche</button>' + btn + '<button class="btn del" data-a="del" data-id="' + c.id + '" title="Supprimer">🗑</button></div></div>';
+    }).join('');
+  }
+
+  /* ---------- actions ---------- */
+  function nameOf(id) { var c = data.clients[id] || data.seen[id] || {}; return c.nom || id; }
+  function setStatus(id, blocked, msg) {
+    var v = { blocked: blocked, msg: msg || '', ts: Date.now() };
+    return db('PUT', '/status/' + id, v).then(function () { data.status[id] = v; render(); });
+  }
+  function showInfo(id) {
+    var c = data.clients[id] || {}, sn = data.seen[id] || {}, st = stateOf(id);
+    var av = $('miAv'); av.style.backgroundImage = c.photo ? 'url(' + c.photo + ')' : ''; av.textContent = c.photo ? '' : (c.nom || '?').charAt(0).toUpperCase();
+    $('miNom').textContent = c.nom || sn.nom || 'Sans nom';
+    var d = function (t) { return t ? new Date(t).toLocaleString('fr-FR') : '—'; };
+    var row = function (k, v) { return '<div><span>' + k + '</span><span>' + esc(v || '—') + '</span></div>'; };
+    $('miBody').innerHTML = row('Entreprise', c.entreprise) + row('Téléphone', c.tel || id) + row('Adresse / Ville', c.adresse) +
+      row('Statut', { active: 'Actif', blocked: 'Bloqué', pending: 'En attente' }[st]) + row('Inscrit le', d(c.createdAt)) + row('Dernière connexion', d(sn.ts));
+    open('mInfo');
+  }
+  function open(m) { $(m).classList.add('on'); }
+  function close() { Array.prototype.forEach.call(document.querySelectorAll('.modal'), function (m) { m.classList.remove('on'); }); }
+
+  $('list').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-a]'); if (!b) return;
+    pendingId = b.getAttribute('data-id');
+    var a = b.getAttribute('data-a');
+    if (a === 'info') { showInfo(pendingId); return; }
+    if (a === 'block') { $('mbName').textContent = nameOf(pendingId); $('mbMsg').value = CFG.blockMessage || ''; open('mBlock'); }
+    else if (a === 'del') { $('mdName').textContent = nameOf(pendingId); open('mDel'); }
+    else setStatus(pendingId, false).then(function () { toast('✓ Accès réactivé'); }).catch(function () { toast('Échec, réessaie.'); });
+  });
+  $('mbGo').onclick = function () {
+    setStatus(pendingId, true, $('mbMsg').value.trim()).then(function () { close(); toast('🔒 Client bloqué'); }).catch(function () { toast('Échec, réessaie.'); });
+  };
+  $('mdGo').onclick = function () {
+    var id = pendingId;
+    Promise.all([db('DELETE', '/clients/' + id), db('DELETE', '/status/' + id), db('DELETE', '/seen/' + id)]).then(function () {
+      delete data.clients[id]; delete data.status[id]; delete data.seen[id]; close(); render(); toast('Client supprimé');
+    }).catch(function () { toast('Échec, réessaie.'); });
+  };
+  $('add').onclick = function () { $('maNom').value = ''; $('maTel').value = ''; $('maErr').textContent = ''; open('mAdd'); };
+  $('maGo').onclick = function () {
+    var nom = $('maNom').value.trim(), tel = $('maTel').value.trim(), id = idOf(tel);
+    if (nom.length < 2) { $('maErr').textContent = 'Entre un nom.'; return; }
+    if (id.length < 8) { $('maErr').textContent = 'Numéro invalide.'; return; }
+    var c = { nom: nom, tel: tel, createdAt: Date.now(), by: 'admin' }, s = { blocked: false, msg: '', ts: Date.now() };
+    Promise.all([db('PUT', '/clients/' + id, c), db('PUT', '/status/' + id, s)]).then(function () {
+      data.clients[id] = c; data.status[id] = s; close(); render(); toast('✓ Client ajouté');
+    }).catch(function () { $('maErr').textContent = 'Échec, réessaie.'; });
+  };
+  $('approval').onchange = function () {
+    var v = { approval: this.checked };
+    db('PUT', '/config', v).then(function () { data.config = v; render(); toast(v.approval ? 'Validation manuelle activée' : 'Validation manuelle désactivée'); });
+  };
+  $('q').oninput = render;
+  $('refresh').onclick = function () { photoCache = null; load().then(function () { toast('Liste actualisée'); }); };
+  $('tabs').onclick = function (e) {
+    var t = e.target.closest('.tab'); if (!t) return;
+    filter = t.getAttribute('data-f');
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (x) { x.classList.toggle('on', x === t); });
+    render();
+  };
+  document.addEventListener('click', function (e) { if (e.target.hasAttribute('data-close') || e.target.classList.contains('modal')) close(); });
+  $('logout').onclick = logout;
+  $('loginForm').onsubmit = function (e) {
+    e.preventDefault(); $('lerr').textContent = '';
+    signIn($('lemail').value.trim(), $('lpass').value).then(showMain).catch(function (er) { $('lerr').textContent = er.message || 'Erreur.'; });
+  };
+
+  /* ---------- démarrage ---------- */
+  $('mode').textContent = DEMO ? 'DÉMO' : 'EN LIGNE';
+  $('mode').className = 'chip' + (DEMO ? ' demo' : '');
+  if (DEMO) showMain();
+  else {
+    var rt = null; try { rt = localStorage.getItem('nl_rt'); } catch (e) {}
+    if (rt) { refresh = rt; doRefresh().then(showMain).catch(showLogin); } else showLogin();
+    setInterval(function () { if (token) doRefresh().catch(function () {}); }, 45 * 60 * 1000);
+  }
+  setInterval(function () { if ($('mainView').style.display === 'block') load(); }, 10000);
+})();
+</script>
+</body>
+</html>
