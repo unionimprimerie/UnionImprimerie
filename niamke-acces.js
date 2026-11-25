@@ -1,4 +1,4 @@
-/* niamke-acces.js — espace multi-clients pour SenPrint (Supabase)
+/* niamke-acces.js — espace multi-clients pour UNION IMPRIMERIE (Supabase)
    - Chaque client crée son espace (nom, entreprise, téléphone, adresse, photo, mot de passe) puis se connecte.
    - Les données de l'app sont séparées par client (/data/<téléphone>/...).
    - Le blocage / la validation faits depuis admin.html sont appliqués ici.
@@ -154,16 +154,34 @@
   /* ---------- émulation des données de l'app, par client ---------- */
   function colPath(col) { return '/data/' + S.id + '/' + String(col).replace(/[^a-zA-Z0-9_-]/g, ''); }
   function newId() { return ('0' + Date.now().toString(36)).slice(-9) + Math.random().toString(36).slice(2, 5); }
+  /* ---------- reprise des anciennes données (ancien nom des collections) : copie unique par compte ---------- */
+  var migP = {};
+  function migrateLegacy() {
+    var id = S.id;
+    if (!id) return Promise.resolve();
+    if (migP[id]) return migP[id];
+    var cols = ['profile', 'lock', 'devis', 'clients', 'prix'];
+    migP[id] = db('GET', colPath('union_imprimerie_meta')).then(function (m) {
+      if (m && m.done) return;
+      return Promise.all(cols.map(function (c) {
+        return db('GET', colPath('senprint_' + c)).then(function (o) {
+          if (!o) return;
+          return Promise.all(Object.keys(o).map(function (k) { return db('PUT', colPath('union_imprimerie_' + c) + '/' + k, o[k]); }));
+        });
+      })).then(function () { return db('PUT', colPath('union_imprimerie_meta') + '/done', { done: true, at: Date.now() }); });
+    }).catch(function () { delete migP[id]; });
+    return migP[id];
+  }
   function handleAction(a) {
     var args = a.args || {}, col = args.collection;
-    return ready.then(function () {
+    return ready.then(migrateLegacy).then(function () {
       switch (a.action) {
         case 'records.list':
           return db('GET', colPath(col)).then(function (o) {
             o = o || {};
             return { records: Object.keys(o).sort().map(function (k) {
               var v = o[k];
-              if (col === 'senprint_profile' && v && typeof v === 'object') v = Object.assign({}, v, { password: S.pw });
+              if (col === 'union_imprimerie_profile' && v && typeof v === 'object') v = Object.assign({}, v, { password: S.pw });
               return { id: k, value: v };
             }) };
           });
@@ -177,7 +195,7 @@
   function saveRec(col, id, value) {
     value = JSON.parse(JSON.stringify(value || {}));
     var step = Promise.resolve();
-    if (col === 'senprint_profile') {
+    if (col === 'union_imprimerie_profile') {
       var np = value.password; delete value.password;
       if (np && np !== S.pw) step = authChangePw(np).then(function () { S.pw = np; });
       if (value.nom) S.nom = value.nom;
@@ -207,7 +225,7 @@
       S.id = id; S.pw = f.pw; S.nom = f.nom; S.photo = f.photo;
       return db('PUT', '/clients/' + id, { nom: f.nom, entreprise: f.ent, tel: f.tel, adresse: f.adr, photo: f.photo, createdAt: Date.now() });
     }).then(function () {
-      return db('PUT', '/data/' + id + '/senprint_profile/' + newId(), { nom: f.nom, entreprise: f.ent, telephone: idOf(f.tel), adresse: f.adr, photo: f.photo });
+      return db('PUT', '/data/' + id + '/union_imprimerie_profile/' + newId(), { nom: f.nom, entreprise: f.ent, telephone: idOf(f.tel), adresse: f.adr, photo: f.photo });
     }).then(function () { try { localStorage.setItem('nl_last_tel', f.tel); } catch (e) {} saveSess(); });
   }
   function doLogin(tel, pw) {
@@ -218,7 +236,7 @@
     }).then(function (c) {
       if (c) { S.nom = c.nom || ''; S.photo = c.photo || ''; return; }
       // compte existant mais fiche effacée par l'admin : on la recrée
-      return db('GET', colPath('senprint_profile')).then(function (o) {
+      return migrateLegacy().then(function () { return db('GET', colPath('union_imprimerie_profile')); }).then(function (o) {
         var p = o ? o[Object.keys(o).sort()[0]] || {} : {};
         S.nom = p.nom || 'Client';
         return db('PUT', '/clients/' + id, { nom: S.nom, entreprise: p.entreprise || '', tel: tel, adresse: '', photo: '', createdAt: Date.now() });
@@ -230,8 +248,8 @@
   /* ---------- prix & produits propres à chaque espace ----------
      Les fonctions de l'app ne changent pas. Chaque client règle SES prix, SES noms de produits
      (et masque ceux qu'il n'utilise pas). Rien n'est partagé entre les espaces. */
-  var PRIX_COL = 'senprint_prix', PRIX_RID = 'liste';
-  window.__spFxKey = function () { return 'senprint_memoire_docs_' + (S.id || 'anon'); };
+  var PRIX_COL = 'union_imprimerie_prix', PRIX_RID = 'liste';
+  window.__spFxKey = function () { return 'union_imprimerie_memoire_docs_' + (S.id || 'anon'); };
   function prods() { return window.__spProducts || null; }
   function snapDefaults() {
     var P = prods();
@@ -265,7 +283,7 @@
     if (document.body) document.body.setAttribute('data-px-view', window.__spView);
   }
   function loadPrices() {
-    return db('GET', colPath(PRIX_COL)).then(function (o) {
+    return migrateLegacy().then(function () { return db('GET', colPath(PRIX_COL)); }).then(function (o) {
       var r = o && o[PRIX_RID];
       if (r && r.items && r.items.length) applyPrices(r.items);
       setView(r && r.view);
@@ -278,9 +296,10 @@
      Les anciens documents (sans compte) sont donnés au premier compte qui se connecte sur cet appareil. */
   function initFx() {
     try {
-      var k = window.__spFxKey(), legacy = localStorage.getItem('senprint_memoire_docs');
-      if (!localStorage.getItem(k) && legacy && !localStorage.getItem('nl_fx_claimed')) {
-        localStorage.setItem(k, legacy); localStorage.setItem('nl_fx_claimed', S.id);
+      var k = window.__spFxKey(), prev = localStorage.getItem('senprint_memoire_docs_' + (S.id || 'anon')), legacy = localStorage.getItem('senprint_memoire_docs');
+      if (!localStorage.getItem(k)) {
+        if (prev) localStorage.setItem(k, prev);
+        else if (legacy && !localStorage.getItem('nl_fx_claimed')) { localStorage.setItem(k, legacy); localStorage.setItem('nl_fx_claimed', S.id); }
       }
     } catch (e) {}
     if (window.__spFxReload) window.__spFxReload();

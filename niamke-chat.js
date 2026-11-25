@@ -1,4 +1,4 @@
-/* niamke-chat.js — tchat de groupe SenPrint (chargé automatiquement par niamke-acces.js)
+/* niamke-chat.js — tchat de groupe UNION IMPRIMERIE (chargé automatiquement par niamke-acces.js)
    Panneau à droite de la page, comme un groupe WhatsApp : messages, personnes en ligne (point vert),
    "X vient de se connecter" / "X est parti". La page des reçus n'est pas modifiée. */
 (function () {
