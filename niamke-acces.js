@@ -306,7 +306,7 @@
     'body[data-px-view="liste"] .grid.xl\\:grid-cols-4{grid-template-columns:minmax(0,1fr)!important;gap:8px!important}body[data-px-view="liste"] .grid.xl\\:grid-cols-4>button{flex-direction:row!important;align-items:center!important}body[data-px-view="liste"] .grid.xl\\:grid-cols-4>button>div:first-child{margin:8px 0 8px 12px!important;padding:0!important}' +
     'body[data-px-view="compact"] .grid.xl\\:grid-cols-4{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}body[data-px-view="compact"] .grid.xl\\:grid-cols-4>button p{display:none!important}@media(min-width:768px){body[data-px-view="compact"] .grid.xl\\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))!important}}';
   function pxCss() {
-    if (!$('nl-pxcss')) { var st = document.createElement('style'); st.id = 'nl-pxcss'; st.textContent = PXCSS; document.head.appendChild(st); }
+    if (!$('nl-pxcss')) { var st = document.createElement('style'); st.id = 'nl-pxcss'; st.textContent = PXCSS + '@media(min-width:1024px){#nl-pxb{left:288px}}@media print{#nl-pxb{display:none!important}}'; document.head.appendChild(st); }
     if (!document.body.getAttribute('data-px-view')) setView(window.__spView);
   }
   function money(n) { return Number(n || 0).toLocaleString('fr-FR') + ' FCFA'; }
@@ -631,10 +631,10 @@
   ready.then(function () { if (!TEST) autoUnlock(); });
 
   /* tchat de groupe : chargé une fois l'accès accordé */
-  var API = window.__niamke = { S: S, DEMO: DEMO, sbCall: sbCall, ready: ready, blocked: false };
+  var API = window.__niamke = { S: S, DEMO: DEMO, sbCall: sbCall, ready: ready, blocked: false, forget: forget };
   ready.then(function () {
     if (TEST) return;
-    var sc = document.createElement('script'); sc.src = 'niamke-chat.js'; sc.async = true; document.head.appendChild(sc);
+    var sc = document.createElement('script'); sc.src = 'niamke-chat.js?v=2'; sc.async = true; document.head.appendChild(sc);
   });
 
   if (TEST) { var h0 = $('nl-hide'); if (h0) h0.remove(); window.__nl = { S: S, doSignup: doSignup, doLogin: doLogin, access: access, handleAction: handleAction, ready: function () { return ready; }, enter: enter }; return; }

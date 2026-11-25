@@ -65,10 +65,11 @@
 
   function build() {
     var st = el('style'); st.textContent = CSS; document.head.appendChild(st);
+    document.body.classList.add('nl-has-chat');
     var p = el('div'); p.id = 'nl-chat'; ui.p = p;
     var h = el('div', 'h'), h1 = el('div', 'h1'), x = el('button', 'x', '✕'); x.type = 'button'; x.title = 'Réduire'; x.onclick = function () { setOpen(false, true); };
-    var out = el('button', 'x', '⎋'); out.type = 'button'; out.title = 'Se déconnecter';
-    out.onclick = function () { if (confirm('Se déconnecter de ' + (S.nom || 'ce compte') + ' ?')) { B.leave(); location.reload(); } };
+    var out = el('button', 'x', '🚪'); out.type = 'button'; out.title = 'Se déconnecter';
+    out.onclick = function () { if (confirm('Se déconnecter de ' + (S.nom || 'ce compte') + ' ?')) { B.leave(); if (N.forget) N.forget(); location.reload(); } };
     var bt = el('div'); bt.style.cssText = 'display:flex;gap:6px'; bt.appendChild(out); bt.appendChild(x);
     h1.appendChild(el('div', 't', '💬 Groupe UNION IMPRIMERIE')); h1.appendChild(bt); h.appendChild(h1);
     ui.sub = el('div', 'sub'); h.appendChild(ui.sub);
