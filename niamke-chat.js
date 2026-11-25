@@ -91,6 +91,7 @@
   function layout() {
     ui.p.style.display = open ? 'flex' : 'none';
     ui.fab.style.display = open ? 'none' : 'flex';
+    document.body.classList.toggle('nl-chat-open', open);
     var root = document.getElementById('root');
     if (root) root.style.paddingRight = (open && wide()) ? W + 'px' : '';
   }
