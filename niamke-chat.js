@@ -70,7 +70,7 @@
     var out = el('button', 'x', '⎋'); out.type = 'button'; out.title = 'Se déconnecter';
     out.onclick = function () { if (confirm('Se déconnecter de ' + (S.nom || 'ce compte') + ' ?')) { B.leave(); location.reload(); } };
     var bt = el('div'); bt.style.cssText = 'display:flex;gap:6px'; bt.appendChild(out); bt.appendChild(x);
-    h1.appendChild(el('div', 't', '💬 Groupe SenPrint')); h1.appendChild(bt); h.appendChild(h1);
+    h1.appendChild(el('div', 't', '💬 Groupe UNION IMPRIMERIE')); h1.appendChild(bt); h.appendChild(h1);
     ui.sub = el('div', 'sub'); h.appendChild(ui.sub);
     ui.on = el('div', 'on'); ui.msgs = el('div', 'msgs');
     ui.msgs.appendChild(ui.empty = el('div', 'empty', 'Dis bonjour 👋\nTous les membres voient les messages.'));
