@@ -437,55 +437,6 @@
     var b = document.createElement('button'); b.id = 'nl-pxb'; b.type = 'button'; b.textContent = '🛍️ Mes produits'; b.onclick = function () { openPrices(); };
     document.body.appendChild(b);
     watchCards();
-    addBigBtn();
-  }
-
-  /* ---------- GROS bouton « Ajouter un produit » (page Catalogue) ---------- */
-  function bigAdd() {
-    var P = prods();
-    if (!P) { alert('Les produits ne sont pas encore chargés. Recharge la page.'); return; }
-    if ($('nl-big')) return;
-    snapDefaults(); pxCss();
-    var cur = P.map(plain), ik = 'papier', maxId = 0;
-    cur.forEach(function (x) { maxId = Math.max(maxId, x.id); });
-    var w = document.createElement('div'); w.id = 'nl-big';
-    w.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:14px;font-family:Segoe UI,Arial,sans-serif;color:#0f172a';
-    w.innerHTML = '<div style="background:#fff;width:100%;max-width:460px;max-height:92vh;overflow:auto;border-radius:20px;padding:20px">' +
-      '<h3 style="margin:0 0 4px;font-size:22px">➕ Nouveau produit</h3>' +
-      '<label class="px-lb">Nom du produit</label><input class="px-in" id="b-name" type="text" placeholder="Ex : Flyers A5">' +
-      '<label class="px-lb">Prix (FCFA)</label><input class="px-in" id="b-price" type="number" inputmode="numeric" min="0" placeholder="Ex : 500">' +
-      '<label class="px-lb">Prix par…</label><input class="px-in" id="b-unit" type="text" value="/ pièce"><div class="px-ch2" id="b-units">' + PXUNITS.map(function (u) { return '<button type="button" data-u="' + esc(u) + '">' + esc(u) + '</button>'; }).join('') + '</div>' +
-      '<label class="px-lb">Image du produit</label><div class="px-ic" id="b-ic">' + PXICONS.map(function (i) { return '<button type="button" data-k="' + i[0] + '"><span>' + i[1] + '</span>' + i[2] + '</button>'; }).join('') + '</div>' +
-      '<div class="px-er" id="b-er" style="padding:10px 0 0"></div>' +
-      '<div style="display:flex;gap:8px;margin-top:10px"><button class="px-b g" id="b-x" type="button">Annuler</button><button class="px-b" id="b-ok" type="button">Enregistrer</button></div></div>';
-    document.body.appendChild(w);
-    function say(m, ok) { var e = $('b-er'); e.textContent = m || ''; e.className = 'px-er' + (ok ? ' ok' : ''); e.style.padding = '10px 0 0'; }
-    function mark() { Array.prototype.forEach.call(w.querySelectorAll('#b-ic button'), function (b) { b.className = b.getAttribute('data-k') === ik ? 'on' : ''; }); }
-    mark();
-    Array.prototype.forEach.call(w.querySelectorAll('#b-ic button'), function (b) { b.onclick = function () { ik = b.getAttribute('data-k'); mark(); }; });
-    Array.prototype.forEach.call(w.querySelectorAll('#b-units button'), function (b) { b.onclick = function () { $('b-unit').value = b.getAttribute('data-u'); }; });
-    $('b-x').onclick = function () { w.remove(); };
-    $('b-ok').onclick = function () {
-      var name = $('b-name').value.trim(), raw = String($('b-price').value).replace(/\s/g, '').replace(',', '.'), price = Math.round(Number(raw));
-      if (!name) { say('Écris le nom du produit.'); return; }
-      if (raw === '' || !isFinite(price) || price < 0) { say('Écris un prix valide (ex : 500).'); return; }
-      var np = { id: maxId + 1, name: name, desc: '', detail: '', unit: $('b-unit').value.trim(), price: price, hidden: false, ik: ik, star: true };
-      var next = [np].concat(cur), b = $('b-ok'); b.disabled = true; b.textContent = 'Enregistrement…';
-      savePrices(next).then(function () {
-        applyPrices(next); if (window.__uiRefresh) window.__uiRefresh();
-        say('✓ ' + name + ' ajouté', true); setTimeout(function () { w.remove(); }, 700);
-      }).catch(function (e) { b.disabled = false; b.textContent = 'Enregistrer'; say('Erreur : ' + niceErr(e)); });
-    };
-    setTimeout(function () { var n = $('b-name'); if (n) n.focus(); }, 50);
-  }
-  function addBigBtn() {
-    if (TEST || $('nl-bigb')) return;
-    var b = document.createElement('button'); b.id = 'nl-bigb'; b.type = 'button'; b.textContent = '➕ AJOUTER UN PRODUIT';
-    b.style.cssText = 'position:fixed;right:14px;bottom:68px;z-index:2147483000;display:none;height:60px;padding:0 26px;border-radius:30px;border:3px solid #fff;background:#f43f5e;color:#fff;font-weight:900;font-size:17px;letter-spacing:.3px;box-shadow:0 8px 24px rgba(244,63,94,.5);cursor:pointer;font-family:inherit';
-    b.onclick = bigAdd;
-    document.body.appendChild(b);
-    function sync() { b.style.display = document.querySelector('.grid.xl\\:grid-cols-4>button') ? 'block' : 'none'; }
-    setInterval(sync, 400); sync();
   }
 
   /* ---------- contrôle d'accès (blocage / validation admin) ---------- */
