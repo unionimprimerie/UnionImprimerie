@@ -7,7 +7,7 @@
   if (!N || window.__nlChat) return;
   window.__nlChat = true;
   var S = N.S, CFG = window.NIAMKE_CFG || {}, W = 340;
-  var explicit = false, lastId = 0, known = {}, prev = null, online = [], unread = 0, open = false, sending = false, failed = false, lastSend = 0;
+  var explicit = false, every = 0, gapMs = 2200, ttlH = 24, skew = 0, lastTotal = 0, lastList = [], sampleAt = 0, lastId = 0, known = {}, prev = null, online = [], unread = 0, open = false, sending = false, failed = false, lastSend = 0;
   var ui = {};
 
   function first(n) { return String(n || 'Client').trim().split(/\s+/)[0]; }
@@ -23,6 +23,14 @@
     online: function () { var d = dLoad(), n = Date.now(); return Promise.resolve(Object.keys(d.pres).filter(function (k) { return n - d.pres[k].ts < 75000; }).map(function (k) { return { id: k, nom: d.pres[k].nom }; })); },
     last: function () { return Promise.resolve(dLoad().msgs.slice(-60)); },
     after: function (id) { return Promise.resolve(dLoad().msgs.filter(function (m) { return m.id > id; })); },
+    poll: function (after, beat) {
+      var d = dLoad(), n = Date.now(); if (beat) { d.pres[S.id] = { nom: S.nom, ts: n }; dSave(d); }
+      var on = Object.keys(d.pres).filter(function (k) { return n - d.pres[k].ts < 150000; }).map(function (k) { return { id: k, nom: d.pres[k].nom }; }).sort(function (a, b) { return String(a.nom).localeCompare(String(b.nom)); });
+      var all = d.msgs.filter(function (m) { return m.id > after; }), msgs = all.slice(-40);
+      var ttl = 24, old = n - ttl * 3600000; d.msgs = d.msgs.filter(function (m) { return new Date(m.created_at).getTime() > old; });
+      all = d.msgs.filter(function (m) { return m.id > after; }); msgs = all.slice(-40);
+      return Promise.resolve({ online: on.length, sample: on.slice(0, 12), msgs: msgs, missed: all.length - msgs.length, ttl: ttl, now: n, every: 5000, gap: 2 });
+    },
     send: function (t) { var d = dLoad(), m = { id: (d.msgs.length ? d.msgs[d.msgs.length - 1].id : 0) + 1, sender: S.id, nom: S.nom, text: t, created_at: new Date().toISOString() }; d.msgs.push(m); d.msgs = d.msgs.slice(-300); dSave(d); return Promise.resolve(m); },
     leave: function () { var d = dLoad(); delete d.pres[S.id]; dSave(d); }
   };
@@ -32,6 +40,7 @@
     online: function () { return N.sbCall('POST', 'rpc/chat_online', {}).then(function (r) { return r || []; }); },
     last: function () { return N.sbCall('GET', COLS + '&order=id.desc&limit=60').then(function (r) { return (r || []).reverse(); }); },
     after: function (id) { return N.sbCall('GET', COLS + '&id=gt.' + id + '&order=id.asc&limit=100').then(function (r) { return r || []; }); },
+    poll: function (after, beat, sample) { return N.sbCall('POST', 'rpc/chat_poll', { p_after: after, p_nom: S.nom || 'Client', p_beat: !!beat, p_limit: 40, p_sample: sample !== false }); },
     send: function (t) { return N.sbCall('POST', 'chat', { sender: S.id, nom: S.nom || 'Client', text: t }, 'return=representation').then(function (r) { return r && r[0]; }); },
     leave: function () {
       try { fetch(CFG.supabaseUrl.replace(/\/+$/, '') + '/rest/v1/rpc/chat_leave', { method: 'POST', keepalive: true, headers: { apikey: CFG.supabaseKey, Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' }, body: '{}' }).catch(function () {}); } catch (e) {}
@@ -58,10 +67,11 @@
     '#nl-chat form{display:flex;gap:6px;padding:10px;border-top:1px solid #e2e8f0;background:#fff;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}' +
     '#nl-chat form input{flex:1;min-width:0;padding:11px 12px;border:1.5px solid #e2e8f0;border-radius:20px;font-size:16px;outline:none;font-family:inherit}#nl-chat form input:focus{border-color:#f43f5e}' +
     '#nl-chat form button{border:0;border-radius:50%;width:42px;height:42px;font-size:18px;cursor:pointer;background:#f1f5f9}#nl-chat form button.go{background:#f43f5e;color:#fff;font-weight:900}#nl-chat form button:disabled{opacity:.5}' +
+    '#nl-chat .chips{display:flex;gap:6px;overflow-x:auto;padding:8px 10px 0;background:#fff;border-top:1px solid #e2e8f0}#nl-chat .chips button{flex:0 0 auto;border:1.5px solid #e2e8f0;background:#f8fafc;border-radius:16px;padding:6px 11px;font:inherit;font-size:13px;font-weight:700;color:#334155;cursor:pointer;white-space:nowrap}#nl-chat .chips button:hover{border-color:#f43f5e;color:#f43f5e}' +
     '#nl-chat .err{color:#dc2626;font-size:12px;font-weight:700;padding:0 12px 6px;background:#fff}' +
     '#nl-fab{position:fixed;right:14px;bottom:14px;z-index:2147482000;width:56px;height:56px;border-radius:50%;border:0;background:#f43f5e;color:#fff;font-size:24px;cursor:pointer;display:none;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(244,63,94,.45);padding:0}' +
     '#nl-fab b{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;border-radius:10px;background:#0f172a;color:#fff;font-size:11px;display:none;align-items:center;justify-content:center;padding:0 5px;border:2px solid #fff}' +
-    '@media print{#nl-chat,#nl-fab{display:none!important}}';
+    '@media print{#nl-chat,#nl-fab{display:none!important}#root{padding-right:0!important}}';
 
   function build() {
     var st = el('style'); st.textContent = CSS; document.head.appendChild(st);
@@ -73,20 +83,25 @@
     var bt = el('div'); bt.style.cssText = 'display:flex;gap:6px'; bt.appendChild(out); bt.appendChild(x);
     h1.appendChild(el('div', 't', '💬 Groupe UNION IMPRIMERIE')); h1.appendChild(bt); h.appendChild(h1);
     ui.sub = el('div', 'sub'); h.appendChild(ui.sub);
+    ui.ttl = el('div', 'ttl'); ui.ttl.style.cssText = 'font-size:11px;font-weight:600;opacity:.7;margin-top:2px;display:none'; h.appendChild(ui.ttl);
     ui.on = el('div', 'on'); ui.msgs = el('div', 'msgs');
     ui.msgs.appendChild(ui.empty = el('div', 'empty', 'Dis bonjour 👋\nTous les membres voient les messages.'));
     ui.err = el('div', 'err'); ui.err.style.display = 'none';
     var f = el('form'), inp = el('input'), wave = el('button', '', '👋'), go = el('button', 'go', '➤');
-    inp.type = 'text'; inp.maxLength = 500; inp.placeholder = 'Écris un message…'; inp.autocomplete = 'off';
+    inp.type = 'text'; inp.maxLength = 200; inp.placeholder = 'Écris un message…'; inp.autocomplete = 'off';
     wave.type = 'button'; wave.title = 'Saluer tout le monde'; go.type = 'submit'; ui.inp = inp; ui.go = go;
     wave.onclick = function () { send('👋 Salut tout le monde !'); };
     f.onsubmit = function (e) { e.preventDefault(); var t = inp.value.trim(); if (t) send(t, true); };
     f.appendChild(wave); f.appendChild(inp); f.appendChild(go);
-    p.appendChild(h); p.appendChild(ui.on); p.appendChild(ui.msgs); p.appendChild(ui.err); p.appendChild(f);
+    var chips = el('div', 'chips');
+    ['Bonjour 👋', 'Bonne journée ☀️', 'Merci 🙏', 'Bon courage 💪', 'Bonne soirée 🌙'].forEach(function (t) {
+      var cb = el('button', '', t); cb.type = 'button'; cb.onclick = function () { send(t); }; chips.appendChild(cb);
+    });
+    p.appendChild(h); p.appendChild(ui.on); p.appendChild(ui.msgs); p.appendChild(ui.err); p.appendChild(chips); p.appendChild(f);
     document.body.appendChild(p);
     var fab = el('button', '', '💬'); fab.id = 'nl-fab'; fab.type = 'button'; fab.title = 'Ouvrir le tchat';
     ui.badge = el('b'); fab.appendChild(ui.badge); fab.onclick = function () { setOpen(true, true); }; ui.fab = fab; document.body.appendChild(fab);
-    window.addEventListener('resize', function () { if (!explicit) open = wide(); layout(); });
+    window.addEventListener('resize', function () { layout(); });
   }
   function wide() { return window.innerWidth >= 1280; }
   function layout() {
@@ -103,6 +118,21 @@
   }
   function showBadge() { ui.badge.textContent = unread > 9 ? '9+' : unread; ui.badge.style.display = unread ? 'flex' : 'none'; }
   function scrollEnd(force) { var m = ui.msgs; if (force || m.scrollHeight - m.scrollTop - m.clientHeight < 90) m.scrollTop = m.scrollHeight; }
+  /* suppression automatique : on retire de l'écran les messages plus vieux que la durée choisie par l'admin */
+  function pruneOld() {
+    if (!ttlH) return;
+    var limit = Date.now() + skew - ttlH * 3600000, ch = ui.msgs.children, i, t, gone = false;
+    for (i = ch.length - 1; i >= 0; i--) {
+      t = +ch[i].getAttribute('data-t');
+      if (t && t < limit) { ui.msgs.removeChild(ch[i]); gone = true; }
+    }
+    if (gone && !ui.msgs.children.length) ui.msgs.appendChild(ui.empty);
+  }
+  function showTtl() {
+    if (!ui.ttl) return;
+    ui.ttl.textContent = ttlH ? ('🕐 Les messages s’effacent après ' + (ttlH % 24 === 0 && ttlH >= 24 ? (ttlH / 24) + (ttlH === 24 ? ' jour (24 h)' : ' jours') : ttlH + ' h')) : '';
+    ui.ttl.style.display = ttlH ? 'block' : 'none';
+  }
   function trim() { while (ui.msgs.children.length > 300) ui.msgs.removeChild(ui.msgs.firstChild); }
 
   function addMsg(m) {
@@ -111,23 +141,34 @@
     var mine = m.sender === S.id, b = el('div', 'b' + (mine ? ' me' : ''));
     if (!mine) { var n = el('div', 'n', m.nom || 'Client'); n.style.color = color(m.sender); b.appendChild(n); }
     b.appendChild(el('span', '', m.text)); b.appendChild(el('div', 'd', hhmm(m.created_at)));
+    b.setAttribute('data-t', String(new Date(m.created_at).getTime() || Date.now()));
     var near = ui.msgs.scrollHeight - ui.msgs.scrollTop - ui.msgs.clientHeight < 90;
     ui.msgs.appendChild(b); trim(); if (mine || near) scrollEnd(true);
     if (!mine && !open) { unread++; showBadge(); }
   }
   function addSys(text, cls) {
     if (ui.empty.parentNode) ui.msgs.removeChild(ui.empty);
-    ui.msgs.appendChild(el('div', 'sys' + (cls ? ' ' + cls : ''), text)); trim(); scrollEnd(false);
+    var sy = el('div', 'sys' + (cls ? ' ' + cls : ''), text); sy.setAttribute('data-t', String(Date.now() + skew));
+    ui.msgs.appendChild(sy); trim(); scrollEnd(false);
   }
-  function renderOnline(list) {
+  var SAMPLE = 12, lastKey = '';
+  function renderOnline(total, list) {
     online = list;
-    ui.sub.innerHTML = ''; var d = el('span', 'dot'); ui.sub.appendChild(d);
-    ui.sub.appendChild(document.createTextNode(list.length + (list.length > 1 ? ' personnes en ligne' : ' personne en ligne')));
+    var others = list.filter(function (u) { return u.id !== S.id; }).slice(0, SAMPLE - 1);
+    var key = total + '|' + others.map(function (u) { return u.id + ':' + u.nom; }).join(',');
+    if (key === lastKey) return; lastKey = key;            /* rien n'a changé : on ne redessine pas */
+    ui.sub.innerHTML = ''; ui.sub.appendChild(el('span', 'dot'));
+    ui.sub.appendChild(document.createTextNode(total + (total > 1 ? ' personnes en ligne' : ' personne en ligne')));
     ui.on.innerHTML = '';
-    list.forEach(function (u) {
+    var shown = [{ id: S.id, nom: S.nom }].concat(others);
+    shown.forEach(function (u) {
       var m = el('div', 'm'), a = el('div', 'av', first(u.nom).charAt(0).toUpperCase()); a.style.background = color(u.id); a.appendChild(el('i'));
       m.appendChild(a); m.appendChild(el('div', '', u.id === S.id ? 'Moi' : first(u.nom))); ui.on.appendChild(m);
     });
+    if (total > shown.length) {                            /* "+475" quand il y a beaucoup de monde */
+      var mm = el('div', 'm'), b = el('div', 'av', '+' + (total - shown.length)); b.style.background = '#64748b'; b.style.fontSize = '12px';
+      mm.appendChild(b); mm.appendChild(el('div', '', 'en ligne')); ui.on.appendChild(mm);
+    }
   }
   function diffPresence(list) {
     var now = {}; list.forEach(function (u) { now[u.id] = u; });
@@ -137,45 +178,98 @@
     }
     prev = now;
   }
+  /* "X vient de se connecter / est parti" seulement s'il y a peu de monde (sinon le tchat est noyé) */
+  function showOnline(total, list) {
+    total = Math.max(total, list.length, 1);
+    if (total <= SAMPLE && list.length >= total) diffPresence(list); else prev = null;
+    renderOnline(total, list);
+  }
 
   /* ---------- envoi ---------- */
+  function rateMsg() { return 'Doucement 😊 attends ' + Math.round(gapMs / 1000) + ' secondes entre deux messages.'; }
   function send(text, clear) {
-    if (sending || Date.now() - lastSend < 700) return;
+    if (sending) return;
+    if (Date.now() - lastSend < gapMs) { setErr(rateMsg()); setTimeout(function () { setErr(''); }, 2000); return; }
     sending = true; lastSend = Date.now(); ui.go.disabled = true; setErr('');
-    B.send(text.slice(0, 500)).then(function (m) {
+    B.send(text.slice(0, 200)).then(function (m) {
       if (clear) ui.inp.value = '';
       if (m) addMsg(m); scrollEnd(true);
-    }).catch(function () { setErr('Message non envoyé. Réessaie.'); }).then(function () { sending = false; ui.go.disabled = false; if (clear) ui.inp.focus(); });
+    }).catch(function (e) { setErr(/chat_rate_limit/.test((e && e.message) || '') ? rateMsg() : 'Message non envoyé. Réessaie.'); }).then(function () { sending = false; ui.go.disabled = false; if (clear) ui.inp.focus(); });
   }
   function setErr(t) { ui.err.textContent = t; ui.err.style.display = t ? 'block' : 'none'; }
 
-  /* ---------- boucle de mise à jour ---------- */
-  var timer = null, lastBeat = 0, busy = false;
+  /* ---------- boucle de mise à jour (niveau 1 : 1 seule requête, rythme adaptatif) ---------- */
+  var timer = null, lastBeat = 0, busy = false, legacy = false;
+  function jit(a, b) { return a + Math.random() * b; }      /* décalage aléatoire : les téléphones ne frappent pas tous en même temps */
+  function nextDelay() {
+    if (document.hidden) return legacy ? 30000 : jit(60000, 8000);
+    if (legacy) return open ? 4000 : 10000;
+    var base = every || 5000;                                 /* rythme conseillé par le serveur selon le nombre de connectés */
+    var d = open ? jit(base, base * 0.3) : jit(base * 3, base * 0.6);
+    if (N.idle && N.idle()) d *= 4;                           /* poste inactif depuis 3 min : 4 fois moins souvent */
+    return Math.min(d, 100000);                               /* jamais plus de 100 s, pour rester « en ligne » */
+  }
   function schedule(ms) { clearTimeout(timer); timer = setTimeout(tick, ms); }
+  function missingPoll(e) { return /PGRST202|chat_poll|HTTP 404/i.test((e && e.message) || ''); }
+  function loadErr(e) {
+    var m = (e && e.message) || '';
+    setErr(/404|PGRST|does not exist/i.test(m) ? 'Tchat non installé : exécute supabase-chat.sql dans Supabase.' : 'Connexion au tchat perdue… nouvelle tentative.');
+  }
+  function applyPoll(r) {
+    r = r || {};
+    var msgs = r.msgs || [], gotSample = Array.isArray(r.sample), list = gotSample ? r.sample : lastList;
+    if (gotSample) { lastList = list; sampleAt = Date.now(); }
+    if (r.every > 0) every = Math.min(Math.max(+r.every, 3000), 30000);
+    if (r.gap > 0) gapMs = Math.round(+r.gap * 1000) + 200;
+    if (r.now > 0) skew = +r.now - Date.now();
+    if (r.ttl !== undefined && +r.ttl !== ttlH) { ttlH = +r.ttl || 0; showTtl(); }
+    lastTotal = +r.online || list.length;
+    showOnline(lastTotal, list);
+    if (r.missed > 0 && lastId > 0) addSys('… des messages plus anciens ne sont pas affichés');
+    msgs.forEach(addMsg);
+    pruneOld();
+  }
+  /* ancien mode (si supabase-chat-niveau1.sql n'est pas encore exécuté) : le tchat continue de marcher */
+  function legacyTick(beat) {
+    return Promise.resolve(beat ? B.beat() : null).then(function () { return B.online(); })
+      .then(function (list) { showOnline(list.length, list); return B.after(lastId); })
+      .then(function (rows) { rows.forEach(addMsg); });
+  }
+  function legacyInit() {
+    return B.beat().catch(function () {}).then(function () { lastBeat = Date.now(); return B.online(); })
+      .then(function (list) { prev = null; showOnline(list.length, list); return B.last(); })
+      .then(function (rows) { rows.forEach(addMsg); scrollEnd(true); });
+  }
   function tick() {
     if (busy) return schedule(1000);
     if (N.blocked) return schedule(5000);
     busy = true;
-    var jobs = [];
-    if (Date.now() - lastBeat > 25000) { lastBeat = Date.now(); jobs.push(B.beat()); }
-    var step = Promise.all(jobs).then(function () { return B.online(); }).then(function (list) { diffPresence(list); renderOnline(list); })
-      .then(function () { return B.after(lastId); }).then(function (rows) { rows.forEach(addMsg); if (failed) { setErr(''); failed = false; } });
-    step.catch(function (e) {
-      failed = true;
-      var m = (e && e.message) || '';
-      setErr(/404|PGRST|does not exist/i.test(m) ? 'Tchat non installé : exécute supabase-chat.sql dans Supabase.' : 'Connexion au tchat perdue… nouvelle tentative.');
-    }).then(function () { busy = false; schedule(document.hidden ? 30000 : (open ? 4000 : 10000)); });
+    var beat = Date.now() - lastBeat > (legacy ? 25000 : 55000);
+    if (beat) lastBeat = Date.now();
+    var wantSample = beat || lastTotal <= 30 || Date.now() - sampleAt > 60000;   /* la liste des avatars n'est demandée qu'une fois par minute (sauf petit groupe) */
+    var step = legacy ? legacyTick(beat) : B.poll(lastId, beat, wantSample).then(applyPoll).catch(function (e) {
+      if (!missingPoll(e)) throw e; legacy = true; return legacyTick(beat);
+    });
+    step.then(function () { if (failed) { setErr(''); failed = false; } })
+      .catch(function (e) { failed = true; lastBeat = 0; loadErr(e); })
+      .then(function () { busy = false; schedule(nextDelay()); });
   }
 
   function init() {
     build();
     var pref = null; try { pref = localStorage.getItem('nl_chat_open'); } catch (e) {}
-    explicit = pref !== null; open = explicit ? pref === '1' : wide();
+    explicit = pref !== null; open = explicit ? pref === '1' : false;   /* fermé par défaut : le tchat ne prend pas de place pendant le travail */
     layout();
-    B.beat().catch(function () {}).then(function () { lastBeat = Date.now(); return B.online(); }).then(function (list) { prev = null; diffPresence(list); renderOnline(list); })
-      .then(function () { return B.last(); }).then(function (rows) { rows.forEach(addMsg); scrollEnd(true); })
-      .catch(function (e) { var m = (e && e.message) || ''; setErr(/404|PGRST|does not exist/i.test(m) ? 'Tchat non installé : exécute supabase-chat.sql dans Supabase.' : 'Connexion au tchat perdue… nouvelle tentative.'); })
-      .then(function () { schedule(open ? 4000 : 10000); });
+    showTtl();
+    B.poll(0, true, true).then(function (r) { lastBeat = Date.now(); prev = null; applyPoll(r); unread = 0; showBadge(); scrollEnd(true); })   /* l'historique déjà là n'est pas « non lu » */
+      .catch(function (e) { if (!missingPoll(e)) throw e; legacy = true; return legacyInit(); })
+      .catch(loadErr)
+      .then(function () { schedule(nextDelay()); });
+    var wasIdle = false;
+    setInterval(function () { wasIdle = !!(N.idle && N.idle()); }, 20000);
+    ['mousemove', 'keydown', 'click', 'touchstart'].forEach(function (ev) {
+      window.addEventListener(ev, function () { if (wasIdle) { wasIdle = false; schedule(1500); } }, { passive: true });
+    });
     window.addEventListener('pagehide', function () { B.leave(); });
     document.addEventListener('visibilitychange', function () { if (!document.hidden) { lastBeat = 0; schedule(0); } });
   }

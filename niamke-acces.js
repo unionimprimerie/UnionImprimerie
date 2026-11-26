@@ -467,10 +467,12 @@
 
   /* ---------- contrôle d'accès (blocage / validation admin) ---------- */
   function access() {
-    return Promise.all([db('GET', '/status/' + S.id), db('GET', '/config').catch(function () { return null; })]).then(function (r) {
-      var st = r[0], cf = r[1] || {};
+    /* 1 seule requête quand le client a déjà un statut (le cas normal) : moitié moins de charge avec beaucoup de monde */
+    return db('GET', '/status/' + S.id).then(function (st) {
       if (st) return st.blocked ? { s: 'blocked', msg: st.msg } : { s: 'ok' };
-      return cf.approval ? { s: 'pending' } : { s: 'ok' };
+      return db('GET', '/config').catch(function () { return null; }).then(function (cf) {
+        return (cf || {}).approval ? { s: 'pending' } : { s: 'ok' };
+      });
     });
   }
   function seen() { return db('PUT', '/seen/' + S.id, { ts: Date.now(), nom: S.nom }).catch(function () {}); }
@@ -489,7 +491,7 @@
     return access().then(function (a) {
       apply(a);
       if (!TEST && !enter.w) {
-        enter.w = setInterval(function () { access().then(apply).catch(function () {}); }, 15000);
+        enter.w = setInterval(function () { if (document.hidden || idle()) return; access().then(apply).catch(function () {}); }, 15000);   /* onglet caché : pas de requête (elle repart au retour sur la page) */
         document.addEventListener('visibilitychange', function () { if (!document.hidden) access().then(apply).catch(function () {}); });
       }
     });
@@ -650,10 +652,14 @@
   ready.then(function () { if (!TEST) autoUnlock(); });
 
   /* tchat de groupe : chargé une fois l'accès accordé */
-  var API = window.__niamke = { S: S, DEMO: DEMO, sbCall: sbCall, ready: ready, blocked: false, forget: forget };
+  /* activité de la personne (souris, clavier) : sert à ralentir les requêtes quand un poste reste ouvert sans que personne travaille dessus */
+  var lastAct = Date.now();
+  ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach(function (ev) { window.addEventListener(ev, function () { lastAct = Date.now(); }, { passive: true, capture: true }); });
+  function idle() { return Date.now() - lastAct > 180000; }   /* inactif depuis plus de 3 minutes */
+  var API = window.__niamke = { S: S, DEMO: DEMO, sbCall: sbCall, ready: ready, blocked: false, forget: forget, idle: idle };
   ready.then(function () {
     if (TEST) return;
-    var sc = document.createElement('script'); sc.src = 'niamke-chat.js?v=2'; sc.async = true; document.head.appendChild(sc);
+    var sc = document.createElement('script'); sc.src = 'niamke-chat.js?v=5'; sc.async = true; document.head.appendChild(sc);
   });
 
   if (TEST) { var h0 = $('nl-hide'); if (h0) h0.remove(); window.__nl = { S: S, doSignup: doSignup, doLogin: doLogin, access: access, handleAction: handleAction, ready: function () { return ready; }, enter: enter }; return; }
