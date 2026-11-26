@@ -113,6 +113,19 @@ input:focus{border-color:var(--rose)}
     <label class="sw" style="margin:0"><input type="checkbox" id="approval"><i></i></label>
   </div>
 
+  <div class="set">
+    <div><b>Tchat : effacer les messages automatiquement</b><small id="ttlHint">Les messages plus vieux que cette durée disparaissent du groupe.</small></div>
+    <select id="chatTtl" style="border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 10px;font:inherit;font-weight:700;background:#fff;max-width:160px">
+      <option value="0">Jamais (7 jours max)</option>
+      <option value="1">Après 1 heure</option>
+      <option value="6">Après 6 heures</option>
+      <option value="12">Après 12 heures</option>
+      <option value="24">Après 24 heures</option>
+      <option value="48">Après 48 heures</option>
+      <option value="168">Après 7 jours</option>
+    </select>
+  </div>
+
   <div class="bar">
     <input type="search" id="q" placeholder="Rechercher un nom ou un numéro…">
     <button class="btn rose" id="add">+ Ajouter un client</button>
@@ -189,14 +202,14 @@ input:focus{border-color:var(--rose)}
     if (t === 'clients') return { nom: r.nom, entreprise: r.entreprise, tel: r.tel, adresse: r.adresse, photo: r.photo, createdAt: r.created_at, by: r.added_by };
     if (t === 'status') return { blocked: r.blocked, msg: r.msg, ts: r.ts };
     if (t === 'seen') return { nom: r.nom, ts: r.ts };
-    if (t === 'config') return { approval: r.approval };
+    if (t === 'config') return { approval: r.approval, chatTtl: r.chat_ttl_hours };
     return r;
   }
   function toRow(t, id, v) {
     v = v || {};
     if (t === 'clients') return { id: id, nom: v.nom, entreprise: v.entreprise, tel: v.tel, adresse: v.adresse, photo: v.photo, created_at: v.createdAt, added_by: v.by };
     if (t === 'status') return { id: id, blocked: !!v.blocked, msg: v.msg || '', ts: v.ts };
-    if (t === 'config') return { id: 1, approval: !!v.approval };
+    if (t === 'config') { var cr = { id: 1, approval: !!v.approval }; if (v.chatTtl !== undefined && v.chatTtl !== null) cr.chat_ttl_hours = +v.chatTtl; return cr; }
     throw new Error('Table inconnue : ' + t);
   }
   function sbRest(method, rel, body, prefer) {
@@ -287,6 +300,7 @@ input:focus{border-color:var(--rose)}
       }
       known = {}; ids.forEach(function (i) { known[i] = 1; });
       $('approval').checked = !!data.config.approval;
+      showTtlSetting();
       return withPhotos().then(render);
     }).catch(function (e) {
       if (e.auth) return doRefresh().then(load).catch(logout);
@@ -406,8 +420,27 @@ input:focus{border-color:var(--rose)}
       data.clients[id] = c; data.status[id] = s; close(); render(); toast('✓ Client ajouté');
     }).catch(function () { $('maErr').textContent = 'Échec, réessaie.'; });
   };
+  function showTtlSetting() {
+    var sel = $('chatTtl'), t = data.config.chatTtl;
+    if (t === undefined || t === null) {
+      /* colonne absente : le SQL « niveau 2 » n'a pas encore été exécuté (en démo, le réglage est gardé sur cet appareil) */
+      sel.value = '24'; sel.disabled = !DEMO;
+      $('ttlHint').textContent = DEMO ? 'Réglage du tchat (mode démo).' : 'Indisponible : exécute d’abord supabase-chat-niveau2.sql dans Supabase.';
+    } else {
+      sel.disabled = false; sel.value = String(t);
+      if (sel.value !== String(t)) { var o = document.createElement('option'); o.value = String(t); o.textContent = 'Après ' + t + ' h'; sel.appendChild(o); sel.value = String(t); }
+      $('ttlHint').textContent = 'Les messages plus vieux que cette durée disparaissent du groupe.';
+    }
+  }
+  $('chatTtl').onchange = function () {
+    var sel = this, h = +sel.value, v = Object.assign({}, data.config, { chatTtl: h }), before = data.config.chatTtl;
+    db('PUT', '/config', v).then(function () {
+      data.config = v;
+      toast(h ? 'Tchat : messages effacés après ' + (h >= 24 && h % 24 === 0 ? (h / 24) + ' jour(s)' : h + ' h') : 'Tchat : suppression automatique désactivée');
+    }).catch(function () { toast('Échec : exécute supabase-chat-niveau2.sql dans Supabase'); sel.value = String(before === undefined || before === null ? 24 : before); });
+  };
   $('approval').onchange = function () {
-    var v = { approval: this.checked };
+    var v = Object.assign({}, data.config, { approval: this.checked });
     db('PUT', '/config', v).then(function () { data.config = v; render(); toast(v.approval ? 'Validation manuelle activée' : 'Validation manuelle désactivée'); });
   };
   $('q').oninput = render;
