@@ -602,14 +602,6 @@
     showGate('<div class="nl-c"><h2>⏳ En attente de validation</h2><p>Ton espace est créé. L’administrateur doit l’activer, ça se met à jour tout seul.</p></div>' +
       '<button class="nl-btn" data-act="retry">Vérifier maintenant</button><button class="nl-btn ghost" data-act="logout">Se déconnecter</button>');
   }
-  function addChip() {
-    if (TEST || $('nl-chip')) return;
-    var b = document.createElement('button'); b.id = 'nl-chip'; b.title = S.nom || 'Mon compte';
-    if (S.photo) b.style.backgroundImage = 'url(' + S.photo + ')'; else b.textContent = (S.nom || '?').charAt(0).toUpperCase();
-    b.onclick = function () { if (confirm('Se déconnecter de ' + (S.nom || 'ce compte') + ' ?')) { forget(); location.reload(); } };
-    document.body.appendChild(b);
-  }
-
   /* le mot de passe de l'app = celui du client : on le saisit à sa place pour qu'il ne le tape pas deux fois */
   function autoUnlock() {
     var tries = 0, filled = 0, t = setInterval(function () {
@@ -630,7 +622,7 @@
   var lastAct = Date.now();
   ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach(function (ev) { window.addEventListener(ev, function () { lastAct = Date.now(); }, { passive: true, capture: true }); });
   function idle() { return Date.now() - lastAct > 180000; }   /* inactif depuis plus de 3 minutes */
-  var API = window.__niamke = { S: S, DEMO: DEMO, sbCall: sbCall, ready: ready, blocked: false, forget: forget, idle: idle };
+  window.__niamke = { S: S, DEMO: DEMO, sbCall: sbCall, ready: ready, blocked: false, forget: forget, idle: idle };
   ready.then(function () {
     if (TEST) return;
     var sc = document.createElement('script'); sc.src = 'niamke-chat.js?v=5'; sc.async = true; document.head.appendChild(sc);
