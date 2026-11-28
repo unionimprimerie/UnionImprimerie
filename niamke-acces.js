@@ -629,7 +629,27 @@
   });
 
   if (TEST) { var h0 = $('nl-hide'); if (h0) h0.remove(); window.__nl = { S: S, doSignup: doSignup, doLogin: doLogin, access: access, handleAction: handleAction, ready: function () { return ready; }, enter: enter }; return; }
+  /* mode hors ligne : l'appareil connaît déjà ce client (session enregistrée) -> on ouvre l'app avec les documents gardés sur l'appareil ;
+     dès que la connexion revient, on rafraîchit la session, on vérifie l'accès et on envoie ce qui attend */
+  function goOffline() {
+    if (!S.id) { showGate('<div class="nl-c"><h2>Pas de connexion</h2><p>Vérifie ton internet.</p></div><button class="nl-btn" onclick="location.reload()">Réessayer</button>'); return; }
+    window.__niamke.offline = true;
+    initFx(); openApp();   /* 'started' reste faux : au retour de la connexion, enter() fait l'initialisation complète (prix, présence…) */
+    hideGate();
+    var tm;
+    var back = function () {
+      if (!window.__niamke.offline) return;
+      refreshTok().then(function () { return enter(); }).then(function () {
+        window.__niamke.offline = false;
+        window.removeEventListener('online', back); clearInterval(tm);
+        if (window.__uiSyncNow) window.__uiSyncNow();
+        if (window.__uiFxReload) window.__uiFxReload();
+      }).catch(function () {});
+    };
+    tm = setInterval(function () { if (navigator.onLine !== false) back(); }, 20000);
+    window.addEventListener('online', back);
+  }
   function boot() { buildUI(); var hasSess = false; try { hasSess = !!localStorage.getItem('nl_sess'); } catch (e) {}
-    if (!DEMO && hasSess) { showGate('<div class="nl-c"><p>Connexion…</p></div>'); resume().then(enter).catch(function (er) { if (/Failed to fetch|NetworkError|Load failed/i.test((er && er.message) || '')) { showGate('<div class="nl-c"><h2>Pas de connexion</h2><p>Vérifie ton internet.</p></div><button class="nl-btn" onclick="location.reload()">Réessayer</button>'); return; } forget(); showAuth('login'); }); return; } var last = ''; try { last = localStorage.getItem('nl_last_tel') || ''; } catch (e) {} showAuth(last ? 'login' : 'signup'); }
+    if (!DEMO && hasSess) { showGate('<div class="nl-c"><p>Connexion…</p></div>'); resume().then(enter).catch(function (er) { if (/Failed to fetch|NetworkError|Load failed/i.test((er && er.message) || '')) { goOffline(); return; } forget(); showAuth('login'); }); return; } var last = ''; try { last = localStorage.getItem('nl_last_tel') || ''; } catch (e) {} showAuth(last ? 'login' : 'signup'); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
