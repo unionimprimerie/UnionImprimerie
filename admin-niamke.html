@@ -65,6 +65,7 @@ input:focus{border-color:var(--rose)}
 .acts{display:flex;gap:8px;flex-wrap:wrap}
 .btn.block{background:var(--ko);color:#fff;min-width:118px}
 .btn.react{background:var(--ok);color:#fff;min-width:118px}
+.btn.pay{background:#f59e0b;color:#fff;min-width:118px}.btn.unpay{background:#e2e8f0;color:#334155;min-width:118px}
 .btn.del{background:#f1f5f9;color:var(--mut)}
 .empty{text-align:center;color:var(--mut);padding:40px 10px;font-weight:600}
 .modal{position:fixed;inset:0;background:rgba(15,23,42,.6);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
@@ -114,6 +115,18 @@ input:focus{border-color:var(--rose)}
   </div>
 
   <div class="set">
+    <div><b>Essai gratuit avant paiement</b><small id="trialHint">Après cette durée, le client est bloqué tant que tu n’as pas coché « 💰 PAYÉ » sur sa carte.</small></div>
+    <select id="trialDays" style="border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 10px;font:inherit;font-weight:700;background:#fff;max-width:160px">
+      <option value="0">Désactivé</option>
+      <option value="3">3 jours</option>
+      <option value="5">5 jours</option>
+      <option value="7">7 jours</option>
+      <option value="15">15 jours</option>
+      <option value="30">30 jours</option>
+    </select>
+  </div>
+
+  <div class="set">
     <div><b>Tchat : effacer les messages automatiquement</b><small id="ttlHint">Les messages plus vieux que cette durée disparaissent du groupe.</small></div>
     <select id="chatTtl" style="border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 10px;font:inherit;font-weight:700;background:#fff;max-width:160px">
       <option value="0">Jamais (7 jours max)</option>
@@ -136,6 +149,7 @@ input:focus{border-color:var(--rose)}
     <button class="tab" data-f="active">Actifs</button>
     <button class="tab" data-f="blocked">Bloqués</button>
     <button class="tab" data-f="pending">En attente</button>
+    <button class="tab" data-f="unpaid">À payer</button>
   </div>
   <div class="list" id="list"></div>
 </div>
@@ -200,16 +214,16 @@ input:focus{border-color:var(--rose)}
   function fromRow(t, r) {
     if (!r) return null;
     if (t === 'clients') return { nom: r.nom, entreprise: r.entreprise, tel: r.tel, adresse: r.adresse, photo: r.photo, createdAt: r.created_at, by: r.added_by };
-    if (t === 'status') return { blocked: r.blocked, msg: r.msg, ts: r.ts };
+    if (t === 'status') return { blocked: r.blocked, msg: r.msg, ts: r.ts, paid: r.paid };
     if (t === 'seen') return { nom: r.nom, ts: r.ts };
-    if (t === 'config') return { approval: r.approval, chatTtl: r.chat_ttl_hours };
+    if (t === 'config') return { approval: r.approval, chatTtl: r.chat_ttl_hours, trialDays: r.trial_days };
     return r;
   }
   function toRow(t, id, v) {
     v = v || {};
     if (t === 'clients') return { id: id, nom: v.nom, entreprise: v.entreprise, tel: v.tel, adresse: v.adresse, photo: v.photo, created_at: v.createdAt, added_by: v.by };
-    if (t === 'status') return { id: id, blocked: !!v.blocked, msg: v.msg || '', ts: v.ts };
-    if (t === 'config') { var cr = { id: 1, approval: !!v.approval }; if (v.chatTtl !== undefined && v.chatTtl !== null) cr.chat_ttl_hours = +v.chatTtl; return cr; }
+    if (t === 'status') { var sr = { id: id, blocked: !!v.blocked, msg: v.msg || '', ts: v.ts }; if (v.paid !== undefined && v.paid !== null) sr.paid = !!v.paid; return sr; }
+    if (t === 'config') { var cr = { id: 1, approval: !!v.approval }; if (v.chatTtl !== undefined && v.chatTtl !== null) cr.chat_ttl_hours = +v.chatTtl; if (v.trialDays !== undefined && v.trialDays !== null) cr.trial_days = +v.trialDays; return cr; }
     throw new Error('Table inconnue : ' + t);
   }
   function sbRest(method, rel, body, prefer) {
@@ -312,7 +326,7 @@ input:focus{border-color:var(--rose)}
       }
       known = {}; ids.forEach(function (i) { known[i] = 1; });
       $('approval').checked = !!data.config.approval;
-      showTtlSetting();
+      showTtlSetting(); showTrialSetting();
       return withPhotos().then(render);
     }).catch(function (e) {
       if (e.auth) return doRefresh().then(load).catch(logout);
@@ -426,7 +440,7 @@ input:focus{border-color:var(--rose)}
     var out = [];
     Object.keys(data.clients).forEach(function (id) {
       var c = data.clients[id] || {}, sn = data.seen[id] || {};
-      out.push({ id: id, nom: c.nom || sn.nom || 'Sans nom', ent: c.entreprise || '', adr: c.adresse || '', photo: c.photo || '', tel: c.tel || id, created: c.createdAt, ts: sn.ts, st: stateOf(id), msg: (data.status[id] || {}).msg });
+      out.push({ id: id, nom: c.nom || sn.nom || 'Sans nom', ent: c.entreprise || '', adr: c.adresse || '', photo: c.photo || '', tel: c.tel || id, created: c.createdAt, ts: sn.ts, st: stateOf(id), msg: (data.status[id] || {}).msg, paid: !!(data.status[id] || {}).paid });
     });
     // clients vus mais pas (encore) enregistrés
     Object.keys(data.seen).forEach(function (id) {
@@ -437,6 +451,21 @@ input:focus{border-color:var(--rose)}
       return (w[a.st] - w[b.st]) || ((b.ts || 0) - (a.ts || 0));
     });
   }
+  function trialDays() { return +data.config.trialDays || 0; }
+  /* essai : null = pas concerné ; sinon { paid, left (ms restants), over } */
+  function trialOf(c) {
+    var td = trialDays();
+    if (!td || c.st !== 'active' || !c.created) return null;
+    if (c.paid) return { paid: true, over: false };
+    var left = c.created + td * 86400000 - Date.now();
+    return { paid: false, left: left, over: left <= 0 };
+  }
+  function trialText(t) {
+    if (t.paid) return '✅ Payé';
+    if (t.over) return '⛔ Essai terminé : paiement attendu';
+    var j = Math.ceil(t.left / 86400000);
+    return '⏳ Essai gratuit : encore ' + j + ' jour' + (j > 1 ? 's' : '');
+  }
   function render() {
     var all = list(), q = $('q').value.trim().toLowerCase();
     $('sTot').textContent = all.length;
@@ -444,7 +473,8 @@ input:focus{border-color:var(--rose)}
     $('sKo').textContent = all.filter(function (c) { return c.st === 'blocked'; }).length;
     $('sWait').textContent = all.filter(function (c) { return c.st === 'pending'; }).length;
     var rows = all.filter(function (c) {
-      if (filter !== 'all' && c.st !== filter) return false;
+      if (filter === 'unpaid') { var tt = trialOf(c); if (!tt || !tt.over) return false; }
+      else if (filter !== 'all' && c.st !== filter) return false;
       return !q || (c.nom + ' ' + c.tel).toLowerCase().indexOf(q) > -1;
     });
     if (!rows.length) { $('list').innerHTML = '<div class="empty">Aucun client ici pour le moment.</div>'; return; }
@@ -455,13 +485,16 @@ input:focus{border-color:var(--rose)}
       var btn = c.st === 'active'
         ? '<button class="btn block" data-a="block" data-id="' + c.id + '">🔒 BLOQUER</button>'
         : '<button class="btn react" data-a="on" data-id="' + c.id + '">' + (c.st === 'pending' ? '✓ ACTIVER' : '🔓 RÉACTIVER') + '</button>';
-      return '<div class="card ' + (c.st === 'active' ? '' : c.st) + '">' +
+      var tr = trialOf(c);
+      var payBtn = tr ? '<button class="btn ' + (tr.paid ? 'unpay' : 'pay') + '" data-a="pay" data-id="' + c.id + '">' + (tr.paid ? '↩ Non payé' : '💰 PAYÉ') + '</button>' : '';
+      return '<div class="card ' + (c.st === 'active' ? (tr && tr.over ? 'blocked' : '') : c.st) + '">' +
         '<div class="av"' + (!c.photo && !DEMO && data.clients[c.id] ? ' data-pid="' + esc(c.id) + '"' : '') + ' style="' + (c.photo ? 'background-image:url(' + esc(c.photo) + ')' : '') + '">' + (c.photo ? '' : esc((c.nom || '?').charAt(0).toUpperCase())) + '</div>' +
         '<div class="info"><b>' + esc(c.nom) + '</b><span class="badge ' + cls + '">' + label + '</span>' +
         (c.ent ? '<div>🏢 ' + esc(c.ent) + '</div>' : '') +
+        (tr ? '<div><b>' + trialText(tr) + '</b></div>' : '') +
         '<div>📞 ' + esc(c.tel) + ' · ' + (online ? '<span class="dot"></span>' : '') + ago(c.ts) + '</div>' +
         (c.st === 'blocked' && c.msg ? '<div>Message : « ' + esc(c.msg) + ' »</div>' : '') + '</div>' +
-        '<div class="acts"><button class="btn see" data-a="info" data-id="' + c.id + '">Fiche</button>' + btn + '<button class="btn del" data-a="del" data-id="' + c.id + '" title="Supprimer">🗑</button></div></div>';
+        '<div class="acts"><button class="btn see" data-a="info" data-id="' + c.id + '">Fiche</button>' + payBtn + btn + '<button class="btn del" data-a="del" data-id="' + c.id + '" title="Supprimer">🗑</button></div></div>';
     }).join('');
     lazyPhotos();
   }
@@ -470,6 +503,11 @@ input:focus{border-color:var(--rose)}
   function nameOf(id) { var c = data.clients[id] || data.seen[id] || {}; return c.nom || id; }
   function setStatus(id, blocked, msg) {
     var v = { blocked: blocked, msg: msg || '', ts: Date.now() };
+    if ((data.status[id] || {}).paid !== undefined) v.paid = data.status[id].paid;
+    return db('PUT', '/status/' + id, v).then(function () { data.status[id] = v; render(); });
+  }
+  function setPaid(id, paid) {
+    var v = Object.assign({ blocked: false, msg: '', ts: Date.now() }, data.status[id] || {}, { paid: !!paid });
     return db('PUT', '/status/' + id, v).then(function () { data.status[id] = v; render(); });
   }
   function showInfo(id) {
@@ -480,7 +518,7 @@ input:focus{border-color:var(--rose)}
     var d = function (t) { return t ? new Date(t).toLocaleString('fr-FR') : '—'; };
     var row = function (k, v) { return '<div><span>' + k + '</span><span>' + esc(v || '—') + '</span></div>'; };
     $('miBody').innerHTML = row('Entreprise', c.entreprise) + row('Téléphone', c.tel || id) + row('Adresse / Ville', c.adresse) +
-      row('Statut', { active: 'Actif', blocked: 'Bloqué', pending: 'En attente' }[st]) + row('Inscrit le', d(c.createdAt)) + row('Dernière connexion', d(sn.ts));
+      row('Statut', { active: 'Actif', blocked: 'Bloqué', pending: 'En attente' }[st]) + row('Inscrit le', d(c.createdAt)) + (trialDays() ? row('Essai / paiement', (data.status[id] || {}).paid ? 'Payé' : (c.createdAt && Date.now() > c.createdAt + trialDays() * 86400000 ? 'Essai terminé, non payé' : 'Essai gratuit en cours')) : '') + row('Dernière connexion', d(sn.ts));
     open('mInfo');
   }
   function open(m) { $(m).classList.add('on'); }
@@ -491,6 +529,11 @@ input:focus{border-color:var(--rose)}
     pendingId = b.getAttribute('data-id');
     var a = b.getAttribute('data-a');
     if (a === 'info') { showInfo(pendingId); return; }
+    if (a === 'pay') {
+      var np = !(data.status[pendingId] || {}).paid;
+      setPaid(pendingId, np).then(function () { toast(np ? '💰 Marqué payé : accès illimité' : '↩ Marqué non payé'); }).catch(function () { toast('Échec : exécute supabase-essai-gratuit.sql dans Supabase'); });
+      return;
+    }
     if (a === 'block') { $('mbName').textContent = nameOf(pendingId); $('mbMsg').value = CFG.blockMessage || ''; open('mBlock'); }
     else if (a === 'del') { $('mdName').textContent = nameOf(pendingId); open('mDel'); }
     else setStatus(pendingId, false).then(function () { toast('✓ Accès réactivé'); }).catch(function () { toast('Échec, réessaie.'); });
@@ -514,6 +557,18 @@ input:focus{border-color:var(--rose)}
       data.clients[id] = c; data.status[id] = s; close(); render(); toast('✓ Client ajouté');
     }).catch(function () { $('maErr').textContent = 'Échec, réessaie.'; });
   };
+  function showTrialSetting() {
+    var sel = $('trialDays'), t = data.config.trialDays;
+    if (t === undefined || t === null) {
+      sel.value = '0'; sel.disabled = !DEMO;
+      $('trialHint').textContent = DEMO ? 'Essai gratuit (mode démo).' : 'Indisponible : exécute d’abord supabase-essai-gratuit.sql dans Supabase.';
+    } else {
+      sel.disabled = false;
+      if (!sel.querySelector('option[value="' + t + '"]')) { var o = document.createElement('option'); o.value = String(t); o.textContent = t + ' jours'; sel.appendChild(o); }
+      sel.value = String(t);
+      $('trialHint').textContent = 'Après cette durée, le client est bloqué tant que tu n’as pas coché « 💰 PAYÉ » sur sa carte.';
+    }
+  }
   function showTtlSetting() {
     var sel = $('chatTtl'), t = data.config.chatTtl;
     if (t === undefined || t === null) {
@@ -532,6 +587,16 @@ input:focus{border-color:var(--rose)}
       data.config = v;
       toast(h ? 'Tchat : messages effacés après ' + (h >= 24 && h % 24 === 0 ? (h / 24) + ' jour(s)' : h + ' h') : 'Tchat : suppression automatique désactivée');
     }).catch(function () { toast('Échec : exécute supabase-chat-niveau2.sql dans Supabase'); sel.value = String(before === undefined || before === null ? 24 : before); });
+  };
+  $('trialDays').onchange = function () {
+    var sel = this, d = +sel.value, before = data.config.trialDays;
+    if (d > 0) {
+      var n = list().filter(function (c) { return c.st === 'active' && !c.paid && c.created && Date.now() > c.created + d * 86400000; }).length;
+      if (n > 0 && !confirm(n + ' client(s) déjà inscrit(s) depuis plus de ' + d + ' jours seront bloqués tant que tu ne les coches pas « PAYÉ ». Continuer ?')) { sel.value = String(before || 0); return; }
+    }
+    var v = Object.assign({}, data.config, { trialDays: d });
+    db('PUT', '/config', v).then(function () { data.config = v; render(); toast(d ? 'Essai gratuit de ' + d + ' jours activé' : 'Essai gratuit désactivé'); })
+      .catch(function () { toast('Échec : exécute supabase-essai-gratuit.sql dans Supabase'); sel.value = String(before || 0); });
   };
   $('approval').onchange = function () {
     var v = Object.assign({}, data.config, { approval: this.checked });

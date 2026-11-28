@@ -34,9 +34,9 @@
   function fromRow(t, r) {
     if (!r) return null;
     if (t === 'clients') return { nom: r.nom, entreprise: r.entreprise, tel: r.tel, adresse: r.adresse, photo: r.photo, createdAt: r.created_at, by: r.added_by };
-    if (t === 'status') return { blocked: r.blocked, msg: r.msg, ts: r.ts };
+    if (t === 'status') return { blocked: r.blocked, msg: r.msg, ts: r.ts, paid: r.paid };
     if (t === 'seen') return { nom: r.nom, ts: r.ts };
-    if (t === 'config') return { approval: r.approval };
+    if (t === 'config') return { approval: r.approval, trialDays: r.trial_days };
     return r;
   }
   function toRow(t, id, v) {
@@ -440,12 +440,26 @@
   }
 
   /* ---------- contrôle d'accès (blocage / validation admin) ---------- */
+  var cfgC = null, cfgT = 0, crC = null;
+  function getCfg() {
+    if (cfgC && Date.now() - cfgT < 60000) return Promise.resolve(cfgC);
+    return db('GET', '/config').catch(function () { return null; }).then(function (cf) { cfgC = cf || {}; cfgT = Date.now(); return cfgC; });
+  }
+  function getCreated() {
+    if (crC) return Promise.resolve(crC);
+    return db('GET', '/clients/' + S.id).catch(function () { return null; }).then(function (c) { crC = (c && +c.createdAt) || 0; return crC; });
+  }
   function access() {
-    /* 1 seule requête quand le client a déjà un statut (le cas normal) : moitié moins de charge avec beaucoup de monde */
     return db('GET', '/status/' + S.id).then(function (st) {
-      if (st) return st.blocked ? { s: 'blocked', msg: st.msg } : { s: 'ok' };
-      return db('GET', '/config').catch(function () { return null; }).then(function (cf) {
-        return (cf || {}).approval ? { s: 'pending' } : { s: 'ok' };
+      if (st && st.blocked) return { s: 'blocked', msg: st.msg };
+      return getCfg().then(function (cf) {
+        if (!st && cf.approval) return { s: 'pending' };
+        var td = +cf.trialDays || 0;
+        if (!td || (st && st.paid)) return { s: 'ok' };       /* essai désactivé, ou client marqué « payé » */
+        return getCreated().then(function (cr) {
+          if (!cr) return { s: 'ok' };
+          return Date.now() > cr + td * 86400000 ? { s: 'expired', days: td } : { s: 'ok' };
+        });
       });
     });
   }
@@ -453,6 +467,7 @@
   function apply(a) {
     if (window.__niamke) window.__niamke.blocked = a.s !== 'ok';
     if (a.s === 'blocked') { showBlocked(a.msg); return; }
+    if (a.s === 'expired') { showExpired(a.days); return; }
     if (a.s === 'pending') { showPending(); return; }
     if (!started) {
       started = true; initSpace().then(openApp, openApp); seen(); addPriceBtn();
@@ -597,6 +612,10 @@
   function showBlocked(msg) {
     showGate('<div class="nl-c"><h2>🔒 Accès bloqué</h2><p>' + esc(msg || CFG.blockMessage || 'Ton accès est suspendu. Contacte l’administrateur.') + '</p></div>' +
       '<button class="nl-btn" data-act="retry">Réessayer</button><button class="nl-btn ghost" data-act="logout">Changer de compte</button>');
+  }
+  function showExpired(d) {
+    showGate('<div class="nl-c"><h2>⏳ Essai gratuit terminé</h2><p>' + esc(CFG.trialMessage || ('Tes ' + d + ' jours d’essai gratuit sont terminés. Effectue ton paiement pour continuer à utiliser l’application.')) + '</p><p>Dès que l’administrateur a confirmé ton paiement, l’accès revient tout seul.</p></div>' +
+      '<button class="nl-btn" data-act="retry">J’ai payé : vérifier</button><button class="nl-btn ghost" data-act="logout">Changer de compte</button>');
   }
   function showPending() {
     showGate('<div class="nl-c"><h2>⏳ En attente de validation</h2><p>Ton espace est créé. L’administrateur doit l’activer, ça se met à jour tout seul.</p></div>' +
