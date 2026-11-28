@@ -183,7 +183,7 @@ input:focus{border-color:var(--rose)}
   var CFG = window.NIAMKE_CFG || {};
   var SB = (CFG.supabaseUrl || '').replace(/\/+$/, ''), KEY = CFG.supabaseKey || '';
   var DEMO = !(SB && KEY && CFG.adminEmail);
-  var token = null, refresh = null, photoCache = null;
+  var token = null, refresh = null, photoCache = {}, lastLoad = Date.now(), infoId = null;
   var data = { clients: {}, status: {}, seen: {}, config: {} };
   var filter = 'all', pendingId = null, known = null;
 
@@ -221,13 +221,24 @@ input:focus{border-color:var(--rose)}
       return r.status === 204 ? null : r.text().then(function (t) { return t ? JSON.parse(t) : null; });
     });
   }
+  /* Supabase renvoie au maximum 1000 lignes par requête : on lit par pages de 1000 jusqu'à la fin */
+  function sbAll(rel) {
+    var out = [];
+    function page(from) {
+      return sbRest('GET', rel + (rel.indexOf('?') > -1 ? '&' : '?') + 'order=id&limit=1000&offset=' + from).then(function (rows) {
+        rows = rows || []; out = out.concat(rows);
+        return rows.length >= 1000 ? page(from + 1000) : out;
+      });
+    }
+    return page(0);
+  }
   function sbDb(method, path, body) {
     var p = path.split('/').filter(Boolean), t = p[0], id = p[1];
-    if (t === 'clients_photos') return sbRest('GET', 'clients?select=id,photo&photo=not.is.null').then(function (rows) { var o = {}; (rows || []).forEach(function (r) { o[r.id] = { photo: r.photo }; }); return o; });
+    if (t === 'clients_photos') return Promise.resolve({});
     if (method === 'GET') {
       if (t === 'config') return sbRest('GET', 'config?select=*&id=eq.1').then(function (rows) { return rows && rows[0] ? fromRow('config', rows[0]) : null; });
       var sel = t === 'clients' ? 'id,nom,entreprise,tel,adresse,created_at,added_by' : '*';
-      return sbRest('GET', t + '?select=' + sel).then(function (rows) { var o = {}; (rows || []).forEach(function (r) { o[r.id] = fromRow(t, r); }); return o; });
+      return sbAll(t + '?select=' + sel).then(function (rows) { var o = {}; (rows || []).forEach(function (r) { o[r.id] = fromRow(t, r); }); return o; });
     }
     if (method === 'DELETE') return sbRest('DELETE', t + '?id=eq.' + encodeURIComponent(id)).then(function () { return null; });
     return sbRest('POST', t + '?on_conflict=id', toRow(t, id, body), 'resolution=merge-duplicates,return=minimal').then(function () { return body; });
@@ -291,6 +302,7 @@ input:focus{border-color:var(--rose)}
 
   /* ---------- chargement + rendu ---------- */
   function load() {
+    lastLoad = Date.now();
     return Promise.all([db('GET', '/clients'), db('GET', '/status'), db('GET', '/seen'), db('GET', '/config')]).then(function (r) {
       data = { clients: r[0] || {}, status: r[1] || {}, seen: r[2] || {}, config: r[3] || {} };
       var ids = Object.keys(data.clients).concat(Object.keys(data.seen));
@@ -308,15 +320,95 @@ input:focus{border-color:var(--rose)}
     });
   }
 
+  /* photos : jamais toutes d'un coup. Chargées une par une quand elles apparaissent à l'écran,
+     puis gardées sur l'appareil (IndexedDB, 1 an : ce sont des logos, ils changent très rarement) : se reconnecter ne les retélécharge plus. */
+  var photoDbP = null, photoQ = [], photoBusy = 0, photoWait = {}, io = null;
+  function idbOpen() {
+    return new Promise(function (res) {
+      try { var r = indexedDB.open('nl_admin_photos', 1); r.onupgradeneeded = function () { r.result.createObjectStore('p'); }; r.onsuccess = function () { res(r.result); }; r.onerror = function () { res(null); }; } catch (e) { res(null); }
+    });
+  }
+  function idbGet(id) {
+    return (photoDbP || (photoDbP = idbOpen())).then(function (d) {
+      return new Promise(function (res) {
+        if (!d) return res(undefined);
+        try { var q = d.transaction('p').objectStore('p').get(id); q.onsuccess = function () { res(q.result); }; q.onerror = function () { res(undefined); }; } catch (e) { res(undefined); }
+      });
+    });
+  }
+  function idbSet(id, v) {
+    (photoDbP || (photoDbP = idbOpen())).then(function (d) { if (!d) return; try { d.transaction('p', 'readwrite').objectStore('p').put(v, id); } catch (e) {} });
+  }
+  function getPhoto(id) {
+    return idbGet(id).then(function (e) {
+      if (e && e.t && Date.now() - e.t < 365 * 86400000) return e.p || '';
+      return sbRest('GET', 'clients?select=photo&id=eq.' + encodeURIComponent(id)).then(function (rows) {
+        var ph = (rows && rows[0] && rows[0].photo) || '';
+        idbSet(id, { p: ph, t: Date.now() });
+        return ph;
+      });
+    });
+  }
+  function paintPhoto(id, ph) {
+    if (data.clients[id]) data.clients[id].photo = ph;
+    if (!ph) return;
+    Array.prototype.forEach.call(document.querySelectorAll('.av[data-pid]'), function (el) {
+      if (el.getAttribute('data-pid') !== id) return;
+      el.style.backgroundImage = 'url(' + ph + ')'; el.textContent = ''; el.removeAttribute('data-pid');
+    });
+    if (infoId === id) { var av = $('miAv'); if (av) { av.style.backgroundImage = 'url(' + ph + ')'; av.textContent = ''; } }
+  }
+  function pumpPhotos() {
+    while (photoBusy < 3 && photoQ.length) {
+      (function (id) {
+        photoBusy++;
+        getPhoto(id).then(function (ph) { photoCache[id] = ph; paintPhoto(id, ph); }).catch(function () {}).then(function () { delete photoWait[id]; photoBusy--; pumpPhotos(); });
+      })(photoQ.shift());
+    }
+  }
+  function wantPhoto(id) {
+    if (DEMO || !id || (id in photoCache) || photoWait[id]) return;
+    photoWait[id] = 1; photoQ.push(id); pumpPhotos();
+  }
+  function lazyPhotos() {
+    if (DEMO) return;
+    var els = document.querySelectorAll('.av[data-pid]');
+    if (io) { io.disconnect(); io = null; }
+    if (!('IntersectionObserver' in window)) { Array.prototype.forEach.call(els, function (el) { wantPhoto(el.getAttribute('data-pid')); }); return; }
+    io = new IntersectionObserver(function (ents) {
+      ents.forEach(function (en) { if (en.isIntersecting) { io.unobserve(en.target); wantPhoto(en.target.getAttribute('data-pid')); } });
+    }, { rootMargin: '200px' });
+    Array.prototype.forEach.call(els, function (el) { io.observe(el); });
+  }
   function withPhotos() {
     if (DEMO) return Promise.resolve();
-    var need = photoCache === null || Object.keys(data.clients).some(function (i) { return !(i in photoCache); });
-    var step = need ? db('GET', '/clients_photos').then(function (o) {
-      photoCache = photoCache || {};
-      Object.keys(data.clients).forEach(function (i) { photoCache[i] = (o[i] && o[i].photo) || ''; });
-    }) : Promise.resolve();
-    return step.then(function () { Object.keys(data.clients).forEach(function (i) { data.clients[i].photo = photoCache[i] || ''; }); });
+    Object.keys(data.clients).forEach(function (i) { data.clients[i].photo = photoCache[i] || ''; });
+    return Promise.resolve();
   }
+  /* rafraîchissement léger : 1 requête « compte » (quelques octets) + seulement les lignes « vu » modifiées.
+     La liste complète n'est rechargée que si le nombre de clients change. */
+  function sbCount(t) {
+    return fetch(SB + '/rest/v1/' + t + '?select=id', { method: 'HEAD', headers: { apikey: KEY, Authorization: 'Bearer ' + token, Prefer: 'count=exact' }, cache: 'no-store' }).then(function (r) {
+      if (r.status === 401) { var e = new Error('401'); e.auth = true; throw e; }
+      if (!r.ok) return null;
+      var m = /\/(\d+)$/.exec(r.headers.get('content-range') || '');
+      return m ? +m[1] : null;
+    });
+  }
+  function lightLoad() {
+    if (DEMO || !token) return load();
+    var since = 0;
+    Object.keys(data.seen).forEach(function (k) { var t = data.seen[k] && data.seen[k].ts; if (t > since) since = t; });
+    return Promise.all([sbCount('clients'), sbAll('seen?select=*&ts=gt.' + Math.max(0, since - 1000))]).then(function (r) {
+      if (r[0] === null || r[0] !== Object.keys(data.clients).length) return load();
+      (r[1] || []).forEach(function (row) { data.seen[row.id] = fromRow('seen', row); });
+      render();
+    }).catch(function (e) {
+      if (e.auth) return doRefresh().then(lightLoad).catch(logout);
+      return load();
+    });
+  }
+
   function stateOf(id) {
     var st = data.status[id];
     if (st) return st.blocked ? 'blocked' : 'active';
@@ -364,13 +456,14 @@ input:focus{border-color:var(--rose)}
         ? '<button class="btn block" data-a="block" data-id="' + c.id + '">🔒 BLOQUER</button>'
         : '<button class="btn react" data-a="on" data-id="' + c.id + '">' + (c.st === 'pending' ? '✓ ACTIVER' : '🔓 RÉACTIVER') + '</button>';
       return '<div class="card ' + (c.st === 'active' ? '' : c.st) + '">' +
-        '<div class="av" style="' + (c.photo ? 'background-image:url(' + esc(c.photo) + ')' : '') + '">' + (c.photo ? '' : esc((c.nom || '?').charAt(0).toUpperCase())) + '</div>' +
+        '<div class="av"' + (!c.photo && !DEMO && data.clients[c.id] ? ' data-pid="' + esc(c.id) + '"' : '') + ' style="' + (c.photo ? 'background-image:url(' + esc(c.photo) + ')' : '') + '">' + (c.photo ? '' : esc((c.nom || '?').charAt(0).toUpperCase())) + '</div>' +
         '<div class="info"><b>' + esc(c.nom) + '</b><span class="badge ' + cls + '">' + label + '</span>' +
         (c.ent ? '<div>🏢 ' + esc(c.ent) + '</div>' : '') +
         '<div>📞 ' + esc(c.tel) + ' · ' + (online ? '<span class="dot"></span>' : '') + ago(c.ts) + '</div>' +
         (c.st === 'blocked' && c.msg ? '<div>Message : « ' + esc(c.msg) + ' »</div>' : '') + '</div>' +
         '<div class="acts"><button class="btn see" data-a="info" data-id="' + c.id + '">Fiche</button>' + btn + '<button class="btn del" data-a="del" data-id="' + c.id + '" title="Supprimer">🗑</button></div></div>';
     }).join('');
+    lazyPhotos();
   }
 
   /* ---------- actions ---------- */
@@ -381,6 +474,7 @@ input:focus{border-color:var(--rose)}
   }
   function showInfo(id) {
     var c = data.clients[id] || {}, sn = data.seen[id] || {}, st = stateOf(id);
+    infoId = id; if (!c.photo) wantPhoto(id);
     var av = $('miAv'); av.style.backgroundImage = c.photo ? 'url(' + c.photo + ')' : ''; av.textContent = c.photo ? '' : (c.nom || '?').charAt(0).toUpperCase();
     $('miNom').textContent = c.nom || sn.nom || 'Sans nom';
     var d = function (t) { return t ? new Date(t).toLocaleString('fr-FR') : '—'; };
@@ -444,7 +538,7 @@ input:focus{border-color:var(--rose)}
     db('PUT', '/config', v).then(function () { data.config = v; render(); toast(v.approval ? 'Validation manuelle activée' : 'Validation manuelle désactivée'); });
   };
   $('q').oninput = render;
-  $('refresh').onclick = function () { photoCache = null; load().then(function () { toast('Liste actualisée'); }); };
+  $('refresh').onclick = function () { load().then(function () { toast('Liste actualisée'); }); };
   $('tabs').onclick = function (e) {
     var t = e.target.closest('.tab'); if (!t) return;
     filter = t.getAttribute('data-f');
@@ -467,7 +561,32 @@ input:focus{border-color:var(--rose)}
     if (rt) { refresh = rt; doRefresh().then(showMain).catch(showLogin); } else showLogin();
     setInterval(function () { if (token) doRefresh().catch(function () {}); }, 45 * 60 * 1000);
   }
-  setInterval(function () { if ($('mainView').style.display === 'block') load(); }, 10000);
+  /* rafraîchissement économe :
+     - toutes les 60 s, version légère (quelques Ko), seulement si l'onglet est visible et que tu es actif
+     - après 5 min sans toucher l'écran : pause totale (plus aucune requête) ; elle repart dès que tu touches
+     - après 30 min d'inactivité : déconnexion automatique
+     - la liste complète est rechargée au retour sur l'onglet après une longue absence, toutes les 30 min, et avec ↻ */
+  var IDLE_PAUSE = 5 * 60000, IDLE_LOGOUT = 30 * 60000, lastAct = Date.now(), paused = false, ticks = 0;
+  function onAct() {
+    lastAct = Date.now();
+    if (paused) { paused = false; if ($('mainView').style.display === 'block') { lastLoad = Date.now(); load().then(function () { toast('Actualisation reprise'); }); } }
+  }
+  ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(function (ev) { document.addEventListener(ev, onAct, { passive: true, capture: true }); });
+  setInterval(function () {
+    if ($('mainView').style.display !== 'block') return;
+    var idle = Date.now() - lastAct;
+    if (!DEMO && idle >= IDLE_LOGOUT) { logout(); $('lerr').textContent = 'Déconnecté automatiquement après 30 min d\'inactivité (économie de données).'; return; }
+    if (document.hidden) return;
+    if (idle >= IDLE_PAUSE) { if (!paused) { paused = true; toast('⏸ Actualisation en pause (inactif) — touche l\'écran pour reprendre'); } return; }
+    ticks++; lastLoad = Date.now();
+    if (ticks % 30 === 0) load(); else lightLoad();
+  }, 60000);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden || $('mainView').style.display !== 'block') return;
+    var away = Date.now() - lastLoad;
+    if (away > 5 * 60000) { lastLoad = Date.now(); load(); }
+    else if (away > 30000) { lastLoad = Date.now(); lightLoad(); }
+  });
 })();
 </script>
 </body>
